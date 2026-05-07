@@ -1,10 +1,7 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "nixpacks": {
-      "aptPackages": ["python3", "python3-pip", "build-essential"]
-    }
+    "builder": "RAILPACK"
   },
   "deploy": {
     "startCommand": "node server/index.js",
