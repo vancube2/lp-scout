@@ -331,9 +331,17 @@ app.listen(PORT, () => {
   console.log(`Agent API available at /api/agent`);
 });
 
-// Start MCP server
-const mcpServer = new LPScoutMCP(rebalanceEngine, choreRunner, copyLPService);
-mcpServer.start().catch(console.error);
+// Start MCP server (non-blocking, errors don't crash main server)
+async function startMCP() {
+  try {
+    const mcpServer = new LPScoutMCP(rebalanceEngine, choreRunner, copyLPService);
+    await mcpServer.start();
+  } catch (error) {
+    console.error('MCP server failed to start:', error.message);
+    console.log('Continuing without MCP server...');
+  }
+}
+startMCP();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
