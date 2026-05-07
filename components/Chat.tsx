@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { chat } from '../lib/lpAgent';
 import { Message, ChatContext, ActionData } from '../lib/types';
+import { AlertStrip, Alert } from './AlertStrip';
+import { ActionCard, ActionCardData } from './ActionCard';
 
 interface ChatProps {
   walletAddress: string | null;
@@ -17,13 +18,13 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
     {
       role: 'assistant',
       content:
-        'Connect your wallet and I\'ll analyze your positions and find the best pools for you right now.',
+        "Connect your wallet and I'll analyze your positions and find the best pools for you right now.",
     },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingActions, setPendingActions] = useState<ActionCardData[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -114,6 +115,18 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
                   };
                   return newMessages;
                 });
+
+                // Also add to pending actions as a card
+                const newAction: ActionCardData = {
+                  id: `action-${Date.now()}`,
+                  type: data.action.type,
+                  status: 'pending',
+                  title: `${data.action.type === 'ZAP_IN' ? 'Zap In' : 'Zap Out'} Recommended`,
+                  description: data.action.reason || 'Action recommended by LP Scout',
+                  data: data.action,
+                  createdAt: new Date().toISOString(),
+                };
+                setPendingActions((prev) => [newAction, ...prev]);
               }
             } catch (e) {
               // Skip malformed lines
@@ -141,6 +154,29 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
     handleSendMessage(input);
   };
 
+  const handleAlertAction = (action: Alert['action'], alertId: string) => {
+    if (action?.type === 'ZAP_IN' || action?.type === 'ZAP_OUT') {
+      onAction(action.data as ActionData);
+    }
+  };
+
+  const handleExecuteAction = (action: ActionCardData) => {
+    if (action.data.type === 'ZAP_IN' || action.data.type === 'ZAP_OUT') {
+      onAction(action.data as ActionData);
+      setPendingActions((prev) =>
+        prev.map((a) => (a.id === action.id ? { ...a, status: 'executing' } : a))
+      );
+    }
+  };
+
+  const handleCancelAction = (action: ActionCardData) => {
+    setPendingActions((prev) => prev.filter((a) => a.id !== action.id));
+  };
+
+  const handleDismissAction = (action: ActionCardData) => {
+    setPendingActions((prev) => prev.filter((a) => a.id !== action.id));
+  };
+
   const parseActionFromContent = (content: string): ActionData | null => {
     const match = content.match(/<action>([\s\S]*?)<\/action>/);
     if (match) {
@@ -159,6 +195,47 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
 
   return (
     <div className="h-full flex flex-col bg-[#030712]">
+      {/* Alerts Strip */}
+      {walletAddress && (
+        <div className="px-4 pt-4">
+          <AlertStrip
+            walletAddress={walletAddress}
+            onAction={handleAlertAction}
+          />
+        </div>
+      )}
+
+      {/* Pending Actions */}
+      {pendingActions.length > 0 && (
+        <div className="px-4 py-2 border-b border-gray-800">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-400">Pending Actions ({pendingActions.length})</span>
+            <button
+              onClick={() => setPendingActions([])}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              Clear All
+            </button>
+          </div>
+          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            {pendingActions.slice(0, 3).map((action) => (
+              <ActionCard
+                key={action.id}
+                action={action}
+                onExecute={handleExecuteAction}
+                onCancel={handleCancelAction}
+                onDismiss={handleDismissAction}
+              />
+            ))}
+            {pendingActions.length > 3 && (
+              <div className="text-center text-xs text-gray-500">
+                +{pendingActions.length - 3} more actions
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => {
@@ -183,7 +260,7 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
                 )}
               </div>
 
-              {/* Action Card */}
+              {/* Action Card in Chat */}
               {action && (
                 <div className="mr-12 bg-gray-800/50 border border-green-500/30 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">

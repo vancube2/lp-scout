@@ -4,6 +4,18 @@ const dotenv = require('dotenv');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
 
+// Import services
+const { RebalanceEngine } = require('./services/rebalanceEngine');
+const { ChoreRunner } = require('./services/choreRunner');
+const { CopyLPService } = require('./services/copyLP');
+const { LPScoutMCP } = require('./mcp/lpScoutMCP');
+
+// Import routes
+const engineRoutes = require('./routes/engine');
+const choresRoutes = require('./routes/chores');
+const copyLPRoutes = require('./routes/copyLP');
+const agentRoutes = require('./routes/agent');
+
 dotenv.config();
 
 const app = express();
@@ -12,9 +24,20 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+// Initialize services
+const rebalanceEngine = new RebalanceEngine();
+const choreRunner = new ChoreRunner();
+const copyLPService = new CopyLPService();
+
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'lp-scout-api' });
+  res.json({
+    status: 'ok',
+    service: 'lp-scout-api',
+    engine: rebalanceEngine.isRunning ? 'running' : 'stopped',
+    activeChores: choreRunner.getActiveChores().length,
+    activeMirrors: copyLPService.getActiveMirrors().length,
+  });
 });
 
 const anthropic = new Anthropic({
@@ -52,6 +75,12 @@ function computeAgentScore(pool) {
   const score = ((vol_24h * fee) / tvl) + (organic_score * 0.2) - (Math.abs(price_24h_change) * 0.1);
   return score;
 }
+
+// Mount new routes
+app.use('/api/engine', engineRoutes(rebalanceEngine));
+app.use('/api/chores', choresRoutes(choreRunner));
+app.use('/api/copy-lp', copyLPRoutes(copyLPService));
+app.use('/api/agent', agentRoutes(rebalanceEngine, choreRunner, copyLPService));
 
 // GET /api/pools/discover
 app.get('/api/pools/discover', async (req, res) => {
@@ -210,6 +239,9 @@ You have access to real-time LP Agent data including:
 - Top pools ranked by agentScore (a composite of realized fee yield, organic score, and volatility)
 - The user's current open positions with PnL, DPR (daily profit rate), inRange status, and uncollected fees
 - Portfolio overview metrics
+- Rebalancing engine controls
+- Chore/task management
+- Copy LP functionality
 
 Your personality: sharp, direct, like a degen who actually knows their numbers. No fluff. Give concrete recommendations with the data behind them.
 
@@ -290,6 +322,30 @@ ${JSON.stringify(context, null, 2)}`;
   }
 });
 
+// Start server
 app.listen(PORT, () => {
   console.log(`LP Scout server running on port ${PORT}`);
+  console.log(`Engine API available at /api/engine`);
+  console.log(`Chores API available at /api/chores`);
+  console.log(`Copy LP API available at /api/copy-lp`);
+  console.log(`Agent API available at /api/agent`);
+});
+
+// Start MCP server
+const mcpServer = new LPScoutMCP(rebalanceEngine, choreRunner, copyLPService);
+mcpServer.start().catch(console.error);
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  rebalanceEngine.stop();
+  choreRunner.stop();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  rebalanceEngine.stop();
+  choreRunner.stop();
+  process.exit(0);
 });
