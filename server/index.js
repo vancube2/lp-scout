@@ -56,10 +56,18 @@ function computeAgentScore(pool) {
 // GET /api/pools/discover
 app.get('/api/pools/discover', async (req, res) => {
   try {
-    const data = await lpAgentRequest('GET', '/pools/discover', null, req.query);
+    const response = await lpAgentRequest('GET', '/pools/discover', null, req.query);
+
+    // Handle different response formats
+    let pools = Array.isArray(response) ? response : (response.data || response.pools || []);
+
+    if (!Array.isArray(pools)) {
+      console.error('Unexpected response format:', typeof response, response);
+      return res.status(500).json({ error: 'Invalid response format from LP Agent' });
+    }
 
     // Add agentScore to each pool and sort
-    const poolsWithScore = data.map(pool => ({
+    const poolsWithScore = pools.map(pool => ({
       ...pool,
       agentScore: computeAgentScore(pool),
     }));
@@ -68,6 +76,7 @@ app.get('/api/pools/discover', async (req, res) => {
 
     res.json(poolsWithScore);
   } catch (error) {
+    console.error('Discover pools error:', error);
     res.status(500).json({ error: 'Failed to fetch pools', details: error.message });
   }
 });
@@ -102,16 +111,25 @@ app.get('/api/positions/opening', async (req, res) => {
       return res.status(400).json({ error: 'owner query param required' });
     }
 
-    const data = await lpAgentRequest('GET', '/lp-positions/opening', null, { owner });
+    const response = await lpAgentRequest('GET', '/lp-positions/opening', null, { owner });
+
+    // Handle different response formats
+    let positions = Array.isArray(response) ? response : (response.data || response.positions || []);
+
+    if (!Array.isArray(positions)) {
+      console.error('Unexpected positions response format:', typeof response, response);
+      return res.status(500).json({ error: 'Invalid response format from LP Agent' });
+    }
 
     // Add isHealthy field to each position
-    const positionsWithHealth = data.map(position => ({
+    const positionsWithHealth = positions.map(position => ({
       ...position,
       isHealthy: position.inRange && position.dpr > 0 && position.pnl.percent > -5,
     }));
 
     res.json(positionsWithHealth);
   } catch (error) {
+    console.error('Positions error:', error);
     res.status(500).json({ error: 'Failed to fetch positions', details: error.message });
   }
 });
