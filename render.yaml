@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: lp-scout-backend
+    runtime: node
+    plan: free
+    buildCommand: cd server && npm install
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: LP_AGENT_API_KEY
+        sync: false
+      - key: SOLANA_PRIVATE_KEY
+        sync: false
+        required: false
+      - key: OWNER_WALLET
+        sync: false
+        required: false
+    healthCheckPath: /health
+    autoDeploy: true

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Shield, Zap, ChevronRight, Wallet } from 'lucide-react';
 import { Pool } from '../lib/types';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
 interface OnboardingScreenProps {
   onComplete: () => void;
   onConnectWallet: () => void;
@@ -26,7 +28,7 @@ export function OnboardingScreen({ onComplete, onConnectWallet }: OnboardingScre
   useEffect(() => {
     const fetchTickers = async () => {
       try {
-        const res = await fetch('/api/pools/live-tickers');
+        const res = await fetch(`${API_URL}/api/pools/live-tickers`);
         if (res.ok) {
           const data = await res.json();
           setTickers(data.slice(0, 5));
