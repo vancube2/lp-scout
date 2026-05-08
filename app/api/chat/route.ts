@@ -108,7 +108,7 @@ ${JSON.stringify(context, null, 2)}`;
       async start(controller) {
         try {
           for await (const chunk of stream) {
-            if (chunk.type === 'content_block_delta' && chunk.delta.text) {
+            if (chunk.type === 'content_block_delta' && 'text' in chunk.delta) {
               const data = JSON.stringify({ text: chunk.delta.text });
               controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
             }
