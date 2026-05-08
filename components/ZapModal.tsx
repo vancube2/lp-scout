@@ -12,7 +12,7 @@ interface ZapModalProps {
   position: Position | null;
   pendingAction: ActionData | null;
   walletAddress: string | null;
-  onClose: () => void;
+  onClose: (success?: boolean, result?: ZapResult) => void;
 }
 
 const STRATEGIES = [
@@ -124,7 +124,7 @@ export function ZapModal({
             <h3 className="text-lg font-semibold mb-2">Wallet Not Connected</h3>
             <p className="text-gray-400 mb-4">Please connect your wallet to continue.</p>
             <button
-              onClick={onClose}
+              onClick={() => onClose()}
               className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700"
             >
               Close
@@ -146,7 +146,7 @@ export function ZapModal({
               {mode === 'in' ? 'Zap In' : 'Zap Out'}
             </h2>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded">
+          <button onClick={() => onClose()} className="p-1 hover:bg-gray-800 rounded">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -198,7 +198,7 @@ export function ZapModal({
             )}
 
             <button
-              onClick={onClose}
+              onClick={() => onClose(true, result || undefined)}
               className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg"
             >
               Done

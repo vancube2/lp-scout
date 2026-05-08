@@ -3,23 +3,42 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
+const bs58 = require('bs58');
+const { Keypair } = require('@solana/web3.js');
 
 // Import services
 const { RebalanceEngine } = require('./services/rebalanceEngine');
 const { ChoreRunner } = require('./services/choreRunner');
 const { CopyLPService } = require('./services/copyLP');
 const { LPScoutMCP } = require('./mcp/lpScoutMCP');
+const jitoService = require('./services/jitoService');
+const feeService = require('./services/feeService');
 
 // Import routes
 const engineRoutes = require('./routes/engine');
 const choresRoutes = require('./routes/chores');
 const copyLPRoutes = require('./routes/copyLP');
 const agentRoutes = require('./routes/agent');
+const jitoRoutes = require('./routes/jito');
+const revenueRoutes = require('./routes/revenue');
+const userRoutes = require('./routes/user');
+const activitiesRoutes = require('./routes/activities');
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+// Server keypair for signing (if private key provided)
+let serverKeypair = null;
+if (process.env.SOLANA_PRIVATE_KEY) {
+  try {
+    serverKeypair = Keypair.fromSecretKey(bs58.decode(process.env.SOLANA_PRIVATE_KEY));
+    console.log('Server keypair loaded:', serverKeypair.publicKey.toBase58());
+  } catch (err) {
+    console.error('Failed to load server keypair:', err.message);
+  }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -29,6 +48,11 @@ const rebalanceEngine = new RebalanceEngine();
 const choreRunner = new ChoreRunner();
 const copyLPService = new CopyLPService();
 
+// Pass server keypair to rebalance engine if available
+if (serverKeypair) {
+  rebalanceEngine.setServerKeypair(serverKeypair);
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -37,6 +61,7 @@ app.get('/health', (req, res) => {
     engine: rebalanceEngine.isRunning ? 'running' : 'stopped',
     activeChores: choreRunner.getActiveChores().length,
     activeMirrors: copyLPService.getActiveMirrors().length,
+    jitoEnabled: !!serverKeypair,
   });
 });
 
@@ -81,6 +106,10 @@ app.use('/api/engine', engineRoutes(rebalanceEngine));
 app.use('/api/chores', choresRoutes(choreRunner));
 app.use('/api/copy-lp', copyLPRoutes(copyLPService));
 app.use('/api/agent', agentRoutes(rebalanceEngine, choreRunner, copyLPService));
+app.use('/api/jito', jitoRoutes);
+app.use('/api/revenue', revenueRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/activities', activitiesRoutes);
 
 // GET /api/pools/discover
 app.get('/api/pools/discover', async (req, res) => {
@@ -107,6 +136,33 @@ app.get('/api/pools/discover', async (req, res) => {
   } catch (error) {
     console.error('Discover pools error:', error);
     res.status(500).json({ error: 'Failed to fetch pools', details: error.message });
+  }
+});
+
+// GET /api/pools/live-tickers (for onboarding - no auth required)
+app.get('/api/pools/live-tickers', async (req, res) => {
+  try {
+    const response = await lpAgentRequest('GET', '/pools/discover', null, { limit: 5 });
+    let pools = Array.isArray(response) ? response : (response.data || response.pools || []);
+
+    if (!Array.isArray(pools)) {
+      return res.status(500).json({ error: 'Invalid response' });
+    }
+
+    const tickers = pools.slice(0, 5).map(pool => {
+      const agentScore = computeAgentScore(pool);
+      const dailyYield = ((pool.vol_24h * pool.fee) / pool.tvl) * 100;
+      return {
+        pair: `${pool.token0_symbol}-${pool.token1_symbol}`,
+        dpr: dailyYield,
+        tvl: pool.tvl,
+        agentScore,
+      };
+    });
+
+    res.json(tickers);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -184,11 +240,15 @@ app.post('/api/pools/:poolId/zap-in', async (req, res) => {
     const { poolId } = req.params;
     const { owner, inputSOL, strategy, slippage_bps } = req.body;
 
-    // Step 1: Get transaction
+    // Calculate fee
+    const feeBreakdown = feeService.buildFeeBreakdown('ZAP_IN', { depositSOL: inputSOL });
+    const netDeposit = feeBreakdown.netDeposit;
+
+    // Step 1: Get transaction with net deposit
     const step1Data = await lpAgentRequest('POST', `/pools/${poolId}/add-tx`, {
       stratergy: strategy || 'Spot',
       owner,
-      inputSOL,
+      inputSOL: netDeposit,
       slippage_bps: slippage_bps || 500,
       mode: 'zap-in',
     });
@@ -196,7 +256,17 @@ app.post('/api/pools/:poolId/zap-in', async (req, res) => {
     // Step 2: Submit transaction
     const step2Data = await lpAgentRequest('POST', `/pools/${poolId}/add-tx/submit`, step1Data);
 
-    res.json(step2Data);
+    // Track revenue
+    feeService.trackRevenue('ZAP_IN', feeBreakdown.fee, owner, {
+      poolId,
+      strategy,
+      depositSOL: inputSOL,
+    });
+
+    res.json({
+      ...step2Data,
+      feeBreakdown,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to zap in', details: error.message });
   }
@@ -205,7 +275,30 @@ app.post('/api/pools/:poolId/zap-in', async (req, res) => {
 // POST /api/positions/zap-out
 app.post('/api/positions/zap-out', async (req, res) => {
   try {
-    const { positionId, bps } = req.body;
+    const { positionId, bps, owner } = req.body;
+
+    // Get position info for fee calculation
+    const positionsRes = await lpAgentRequest('GET', '/lp-positions/opening', null, { owner });
+    const positions = Array.isArray(positionsRes) ? positionsRes : (positionsRes.data || []);
+    const position = positions.find(p => p.id === positionId);
+
+    // Calculate fee if position found
+    let feeBreakdown = null;
+    if (position) {
+      const positionValueSOL = parseFloat(position.current_value_usd) / 150;
+      const uncollectedFeesSOL = parseFloat(position.uncollected_fees_usd || 0) / 150;
+      feeBreakdown = feeService.buildFeeBreakdown('ZAP_OUT', {
+        positionValueSOL,
+        pnlPercent: position.pnl?.percent || 0,
+        uncollectedFeesSOL,
+      });
+
+      // Track revenue
+      feeService.trackRevenue('ZAP_OUT', feeBreakdown.fee, owner, {
+        positionId,
+        pnl: position.pnl?.percent,
+      });
+    }
 
     // Step 1: Get quote
     const quote = await lpAgentRequest('POST', '/position/decrease-quotes', {
@@ -219,9 +312,33 @@ app.post('/api/positions/zap-out', async (req, res) => {
     // Step 3: Submit transaction
     const result = await lpAgentRequest('POST', '/position/decrease-tx/submit', tx);
 
-    res.json({ ...result, quote });
+    res.json({
+      ...result,
+      quote,
+      feeBreakdown,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to zap out', details: error.message });
+  }
+});
+
+// POST /api/agent/execute (with fee tracking)
+app.post('/api/agent/execute', async (req, res) => {
+  try {
+    const { action, wallet, params } = req.body;
+
+    // Calculate agent routing fee
+    const routedSOL = params.inputSOL || 0;
+    const agentFee = feeService.agentRoutingFee(routedSOL);
+    feeService.trackRevenue('AGENT', agentFee, wallet, { action, params });
+
+    res.json({
+      success: true,
+      fee: agentFee,
+      message: 'Agent routing fee tracked',
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -233,31 +350,55 @@ app.post('/api/chat', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const basePrompt = `You are LP Scout, an expert AI agent for Meteora liquidity pool strategy on Solana.
+  const basePrompt = `You are LP Scout — an elite Meteora LP co-pilot on Solana.
 
-Your personality: sharp, direct, like a degen who actually knows their numbers. No fluff. Give concrete recommendations with the data behind them.
+PERSONALITY:
+- Sharp, direct, zero fluff
+- You make decisions and tell users what to do — not just options
+- You're genuinely excited about yield
+- You celebrate wins. Honest about losses without drama.
+- Speak like a degen who knows the numbers
+- Max 3 lines per response unless user asks for detail
+- Always end with a clear action when relevant
 
-When recommending a pool, always mention:
-- The agentScore and what drives it (calculated from: (vol_24h * fee / tvl) + organic_score * 0.2 - |price_change| * 0.1)
-- 24h volume and fee rate
-- Organic score (quality signal - higher means more organic trading, less wash trading)
-- Your recommended strategy: Spot (stable pairs), Curve (correlated assets), BidAsk (volatile/directional)
+FORMATTING RULES — STRICT:
+- Never use bullet points or headers in chat
+- Never say "I'd recommend" — say "Do this"
+- Never say "you might want to" — say "you should" or "don't"
+- Numbers always include $ or SOL unit
+- Positive numbers get ↑, negative get ↓
 
-Strategy guidelines:
-- Spot: Best for stable pairs like USDC/USDT where prices stay close. Equal liquidity distribution.
-- Curve: Best for correlated assets like SOL/stSOL or SOL/bSOL. Concentrated around current price for higher fee capture.
-- BidAsk: Best for volatile pairs. Wide range to capture volatility fees while minimizing rebalance frequency.
+RESPONSE TEMPLATES:
+Status check:
+"[Headline stat].
+[One supporting detail].
+[Action]"
 
-When you recommend entering a position, end with an action block:
-<action>
-{
-  "type": "ZAP_IN",
-  "poolId": "pool_address",
-  "inputSOL": recommended_amount (1-10 for starters),
-  "strategy": "Spot" | "Curve" | "BidAsk",
-  "reason": "brief explanation"
-}
-</action>`;
+Recommendation:
+"[Pool]. [Why in one number].
+[One risk if any].
+[Action button text]"
+
+Win:
+"[Position] up [amount].
+[What caused it].
+[Next move]"
+
+Problem:
+"[Position] out of range — [missed fees] since [time].
+One tap to fix."
+
+FEE FRAMING — always transparent, always positive:
+- Zap fee: "0.05% to enter — that's it"
+- Performance fee: "0.5% on your profit — we earn together"
+- No profit: "No fee — LP Scout only earns when you do"
+- Rebalance: "0.02% — engine pays for itself in hours"
+Never apologize for fees. They're fair and you know it.
+
+JITO — mention casually when executing:
+"Sending via Jito atomic bundle — MEV-shielded."
+"Landed in 1.8s."
+"Exit and re-entry land in the same block or neither does."`;
 
   // Different context based on wallet connection
   let walletSpecificPrompt = '';
@@ -349,6 +490,8 @@ app.listen(PORT, () => {
   console.log(`Chores API available at /api/chores`);
   console.log(`Copy LP API available at /api/copy-lp`);
   console.log(`Agent API available at /api/agent`);
+  console.log(`Jito API available at /api/jito`);
+  console.log(`User API available at /api/user`);
 });
 
 // Start MCP server (non-blocking, errors don't crash main server)
