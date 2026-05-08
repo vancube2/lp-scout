@@ -1,6 +1,6 @@
 import { Pool, Position, PortfolioOverview, ZapInParams, ZapResult, Message, ChatContext } from './types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_URL = ''; // Use relative URLs for Vercel deployment
 
 export async function discoverPools(params?: Record<string, string>): Promise<Pool[]> {
   const queryParams = new URLSearchParams(params || {});

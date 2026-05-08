@@ -81,11 +81,9 @@ function AppContent() {
     }
   }, [walletAddress]);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
   const fetchPools = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/pools/discover?limit=10`);
+      const res = await fetch('/api/pools/discover?limit=10');
       if (res.ok) {
         const data = await res.json();
         setPools(data.slice(0, 5));
@@ -98,7 +96,7 @@ function AppContent() {
   const fetchPositions = async () => {
     if (!walletAddress) return;
     try {
-      const res = await fetch(`${API_URL}/api/positions/opening?owner=${walletAddress}`);
+      const res = await fetch(`/api/positions/opening?owner=${walletAddress}`);
       if (res.ok) {
         const data = await res.json();
         setPositions(data);
@@ -111,7 +109,7 @@ function AppContent() {
   const fetchOverview = async () => {
     if (!walletAddress) return;
     try {
-      const res = await fetch(`${API_URL}/api/positions/overview?owner=${walletAddress}`);
+      const res = await fetch(`/api/positions/overview?owner=${walletAddress}`);
       if (res.ok) {
         const data = await res.json();
         setOverview(data.data || data);
@@ -124,7 +122,7 @@ function AppContent() {
   const checkSessionSummary = async () => {
     if (!walletAddress) return;
     try {
-      const res = await fetch(`${API_URL}/api/user/summary/${walletAddress}`);
+      const res = await fetch(`/api/user/summary/${walletAddress}`);
       if (res.ok) {
         const data = await res.json();
         if (data.sessionSummary && data.sessionSummary.earnedSinceLastVisit > 0) {

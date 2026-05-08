@@ -5,8 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, TrendingUp, ArrowRight } from 'lucide-react';
 import { Pool, Position, PortfolioOverview } from '../lib/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
 interface ChatOverlayProps {
   walletAddress: string | null;
   onClose: () => void;
@@ -59,7 +57,7 @@ export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayPro
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/chat`, {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
