@@ -8,12 +8,15 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
-  GlowWalletAdapter,
   TorusWalletAdapter,
   LedgerWalletAdapter,
   SolletExtensionWalletAdapter,
   TrustWalletAdapter,
   CoinbaseWalletAdapter,
+  Coin98WalletAdapter,
+  MathWalletAdapter,
+  SafePalWalletAdapter,
+  TokenPocketWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 
@@ -27,9 +30,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Most popular wallets first
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
-      new GlowWalletAdapter(),
       new TrustWalletAdapter(),
       new CoinbaseWalletAdapter(),
+      new Coin98WalletAdapter(),
+      new SafePalWalletAdapter(),
+      new TokenPocketWalletAdapter(),
+      new MathWalletAdapter(),
       new LedgerWalletAdapter(),
       new SolletExtensionWalletAdapter(),
       new TorusWalletAdapter(),
