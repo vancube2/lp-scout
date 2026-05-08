@@ -8,7 +8,6 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
-  BackpackWalletAdapter,
   GlowWalletAdapter,
   TorusWalletAdapter,
   LedgerWalletAdapter,
@@ -28,7 +27,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Most popular wallets first
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
       new GlowWalletAdapter(),
       new TrustWalletAdapter(),
       new CoinbaseWalletAdapter(),
