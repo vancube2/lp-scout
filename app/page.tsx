@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { WalletProvider } from '../components/WalletProvider';
 import { WalletConnect } from '../components/WalletConnect';
 import { Chat } from '../components/Chat';
@@ -24,6 +25,10 @@ function AppContent() {
     portfolioOverview: null,
   });
   const [activeRightPanel, setActiveRightPanel] = useState<'pools' | 'copy'>('pools');
+
+  const { setVisible } = useWalletModal();
+
+  const openWalletModal = () => setVisible(true);
 
   const handleZapIn = (pool: Pool) => {
     setSelectedPool(pool);
@@ -73,6 +78,11 @@ function AppContent() {
               <span className="text-sm font-bold text-white">LP</span>
             </div>
             <h1 className="text-xl font-bold">LP Scout</h1>
+            {!walletAddress && (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded-full">
+                Demo Mode
+              </span>
+            )}
           </div>
           <WalletConnect onConnect={setWalletAddress} />
         </div>
@@ -91,6 +101,7 @@ function AppContent() {
             onOverviewUpdate={(overview) =>
               setChatContext((prev) => ({ ...prev, portfolioOverview: overview }))
             }
+            onConnectWallet={openWalletModal}
           />
         </div>
 
@@ -100,6 +111,7 @@ function AppContent() {
             walletAddress={walletAddress}
             context={chatContext}
             onAction={handleAction}
+            onConnectWallet={openWalletModal}
           />
         </div>
 
@@ -144,6 +156,8 @@ function AppContent() {
                   onPoolsUpdate={(pools) =>
                     setChatContext((prev) => ({ ...prev, topPools: pools }))
                   }
+                  walletAddress={walletAddress}
+                  onConnectWallet={openWalletModal}
                 />
               ) : (
                 <CopyLP />

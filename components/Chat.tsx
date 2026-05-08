@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Zap } from 'lucide-react';
+import { Send, Zap, Wallet } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ChatContext, ActionData } from '../lib/types';
 import { AlertStrip, Alert } from './AlertStrip';
@@ -11,14 +11,28 @@ interface ChatProps {
   walletAddress: string | null;
   context: ChatContext;
   onAction: (action: ActionData) => void;
+  onConnectWallet: () => void;
 }
 
-export function Chat({ walletAddress, context, onAction }: ChatProps) {
+export function Chat({ walletAddress, context, onAction, onConnectWallet }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content:
-        "Connect your wallet and I'll analyze your positions and find the best pools for you right now.",
+      content: `**Welcome to LP Scout!** 🤖
+
+I'm your AI liquidity pool strategist for Meteora on Solana. I can help you:
+
+• **Discover top pools** ranked by real yield and quality metrics
+• **Analyze market conditions** and recommend strategies (Spot/Curve/BidAsk)
+• **Answer LP questions** about impermanent loss, fees, and positioning
+• **Manage your positions** (when you connect your wallet)
+
+Try asking me:
+- "What are the best pools right now?"
+- "Explain the difference between Spot and Curve strategies"
+- "Which pool has the best risk-adjusted returns?"
+
+Connect your wallet anytime to get personalized recommendations based on your holdings!`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -34,25 +48,27 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
     scrollToBottom();
   }, [messages]);
 
-  // Auto-send context when wallet connects or data updates
+  // Auto-send welcome analysis when wallet connects
   useEffect(() => {
-    if (walletAddress && context.topPools.length > 0) {
-      const hasSentContext = messages.some(
-        (m) => m.role === 'user' && m.content.includes('Analyze my portfolio')
+    if (walletAddress && context.openPositions.length > 0) {
+      const hasAnalyzed = messages.some(
+        (m) => m.role === 'assistant' && m.content.includes('Your Portfolio Analysis')
       );
 
-      if (!hasSentContext) {
-        handleSendMessage('Analyze my portfolio and current positions');
+      if (!hasAnalyzed) {
+        handleSendMessage('Analyze my portfolio and positions', true);
       }
     }
   }, [walletAddress]);
 
   const handleSendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, isAuto: boolean = false) => {
       if (!content.trim() || isLoading) return;
 
       const userMessage: Message = { role: 'user', content };
-      setMessages((prev) => [...prev, userMessage]);
+      if (!isAuto) {
+        setMessages((prev) => [...prev, userMessage]);
+      }
       setInput('');
       setIsLoading(true);
 
@@ -63,9 +79,10 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              messages: [...messages, userMessage],
+              messages: isAuto ? [{ role: 'user', content }] : [...messages, userMessage],
               walletAddress,
               context,
+              hasWallet: !!walletAddress,
             }),
           }
         );
@@ -161,6 +178,10 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
   };
 
   const handleExecuteAction = (action: ActionCardData) => {
+    if (!walletAddress) {
+      onConnectWallet();
+      return;
+    }
     if (action.data.type === 'ZAP_IN' || action.data.type === 'ZAP_OUT') {
       onAction(action.data as ActionData);
       setPendingActions((prev) =>
@@ -193,9 +214,14 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
     return content.replace(/<action>[\s\S]*?<\/action>/g, '').trim();
   };
 
+  // Quick suggestion chips
+  const suggestions = walletAddress
+    ? ['Analyze my portfolio', 'Best pools for my holdings', 'Should I rebalance?']
+    : ['Top pools right now', 'Spot vs Curve vs BidAsk?', 'What is agentScore?'];
+
   return (
     <div className="h-full flex flex-col bg-[#030712]">
-      {/* Alerts Strip */}
+      {/* Alerts Strip - only when wallet connected */}
       {walletAddress && (
         <div className="px-4 pt-4">
           <AlertStrip
@@ -209,7 +235,9 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
       {pendingActions.length > 0 && (
         <div className="px-4 py-2 border-b border-gray-800">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-400">Pending Actions ({pendingActions.length})</span>
+            <span className="text-xs font-medium text-gray-400">
+              Pending Actions ({pendingActions.length})
+            </span>
             <button
               onClick={() => setPendingActions([])}
               className="text-xs text-gray-500 hover:text-gray-300"
@@ -238,6 +266,28 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {!walletAddress && (
+          <div className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-3">
+              <Wallet className="w-5 h-5 text-green-400 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-white mb-1">
+                  Preview Mode
+                </h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  You're browsing in demo mode. Connect your wallet to execute trades and see your actual positions.
+                </p>
+                <button
+                  onClick={onConnectWallet}
+                  className="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-md transition-colors"
+                >
+                  Connect Wallet
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {messages.map((message, index) => {
           const action = message.action || parseActionFromContent(message.content);
           const cleanText = cleanContent(message.content);
@@ -300,11 +350,10 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
                       onClick={() => onAction(action)}
                       className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-md transition-colors"
                     >
-                      Execute
+                      {walletAddress ? 'Execute' : 'Connect to Execute'}
                     </button>
                     <button
                       onClick={() => {
-                        // Remove action from message
                         setMessages((prev) =>
                           prev.map((m, i) =>
                             i === index ? { ...m, action: undefined } : m
@@ -321,6 +370,22 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
             </div>
           );
         })}
+
+        {/* Suggestion Chips */}
+        {!isLoading && messages.length <= 2 && (
+          <div className="flex flex-wrap gap-2 mt-4">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => handleSendMessage(suggestion)}
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-full transition-colors border border-gray-700"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
+
         {isLoading && (
           <div className="mr-12 bg-gray-900 rounded-lg p-3 flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -338,7 +403,11 @@ export function Chat({ walletAddress, context, onAction }: ChatProps) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask LP Scout about pools, positions, or strategies..."
+            placeholder={
+              walletAddress
+                ? "Ask about your portfolio or request recommendations..."
+                : "Ask about pools, strategies, or market conditions..."
+            }
             className="flex-1 px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
             disabled={isLoading}
           />

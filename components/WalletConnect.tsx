@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useWalletModal, WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { truncateAddress } from '../lib/utils';
 
 interface WalletConnectProps {
@@ -35,4 +35,16 @@ export function WalletConnect({ onConnect }: WalletConnectProps) {
       {connected && publicKey ? truncateAddress(publicKey.toBase58()) : 'Connect Wallet'}
     </WalletMultiButton>
   );
+}
+
+// Hook to access wallet modal from other components
+export function useWalletConnectModal() {
+  const { setVisible } = useWalletModal();
+  const { publicKey, connected } = useWallet();
+
+  return {
+    openWalletModal: () => setVisible(true),
+    isConnected: connected,
+    walletAddress: publicKey?.toBase58() || null,
+  };
 }
