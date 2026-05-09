@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { WalletProvider } from '../components/WalletProvider';
-import { Pool, Position, PortfolioOverview } from '../lib/types';
 import { Dashboard } from '../components/Dashboard';
+import { Pool, Position, PortfolioOverview } from '../lib/types';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 
 function AppContent() {
@@ -11,7 +11,12 @@ function AppContent() {
   const [pools, setPools] = useState<Pool[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [overview, setOverview] = useState<PortfolioOverview | null>(null);
+  const [isClient, setIsClient] = useState(false);
   const { setVisible: setWalletModalVisible } = useWalletModal();
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Fetch pools on mount
   useEffect(() => {
@@ -66,8 +71,18 @@ function AppContent() {
   }, [walletAddress]);
 
   const handleConnectWallet = () => {
+    console.log('Opening wallet modal...');
     setWalletModalVisible(true);
   };
+
+  // Show loading state during SSR
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <div className="text-[#94a3b8] animate-pulse">Loading LP Scout...</div>
+      </div>
+    );
+  }
 
   return (
     <Dashboard
