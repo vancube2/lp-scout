@@ -492,19 +492,65 @@ app.listen(PORT, () => {
   console.log(`Agent API available at /api/agent`);
   console.log(`Jito API available at /api/jito`);
   console.log(`User API available at /api/user`);
+  console.log(`MCP endpoint available at /mcp`);
 });
 
-// Start MCP server (non-blocking, errors don't crash main server)
-async function startMCP() {
+// MCP endpoint for Anthropic connector (stateless HTTP transport)
+// This must be publicly accessible via HTTPS for hackathon demos
+// Use ngrok: ngrok http 4000, then set PUBLIC_URL in .env
+app.post('/mcp', async (req, res) => {
+  try {
+    // Dynamic import for ES modules
+    const { createLPScoutMCPServer } = await import('./mcp/lpScoutMCPServer.js');
+    const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
+
+    const mcpServer = createLPScoutMCPServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless mode
+    });
+
+    res.on('close', () => transport.close());
+
+    await mcpServer.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    console.error('MCP error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
+// MCP capabilities endpoint for external agents
+app.get('/mcp/capabilities', (req, res) => {
+  res.json({
+    agent: 'LP Scout',
+    version: '1.0.0',
+    mcpEndpoint: `${process.env.PUBLIC_URL || `http://localhost:${PORT}`}/mcp`,
+    tools: [
+      'discover_pools', 'get_pool_detail', 'get_top_lpers',
+      'get_positions', 'get_portfolio_overview',
+      'preview_zap_in', 'execute_zap_in',
+      'preview_zap_out', 'execute_zap_out',
+      'preview_rebalance', 'execute_rebalance',
+      'get_engine_status', 'enable_auto_manage',
+      'start_copy_lp', 'stop_copy_lp',
+      'create_chore', 'get_chores', 'cancel_chore',
+      'get_jito_status', 'get_fee_estimate', 'recommend_pool',
+    ],
+  });
+});
+
+// Keep old MCP server for backward compatibility (stdio for local CLI)
+async function startMCPIOld() {
   try {
     const mcpServer = new LPScoutMCP(rebalanceEngine, choreRunner, copyLPService);
     await mcpServer.start();
   } catch (error) {
-    console.error('MCP server failed to start:', error.message);
-    console.log('Continuing without MCP server...');
+    console.error('Legacy MCP server failed to start:', error.message);
   }
 }
-startMCP();
+startMCPIOld();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

@@ -267,77 +267,79 @@ Be concise and data-driven.`;
     }
   });
 
-  // POST /api/agent/chat
+  // POST /api/agent/chat - MCP Connector Version
   router.post('/chat', async (req, res) => {
     try {
-      const { messages, walletAddress, context = {} } = req.body;
+      const { messages, walletAddress, context = {}, autoExecute = false } = req.body;
 
       // Set up SSE
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
-      const systemPrompt = `You are LP Scout, an expert AI agent for Meteora liquidity pool strategy on Solana.
+      const emit = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
-You have access to:
-- Real-time pool data with agentScore
-- User's open positions with PnL, DPR, inRange status
-- Rebalancing engine controls
-- Chore/task management
-- Copy LP functionality
+      const systemPrompt = buildMCPSystemPrompt(walletAddress, context);
 
-Your personality: sharp, direct, data-driven. Give concrete recommendations.
+      // Tool safety config
+      const EXECUTION_TOOLS = [
+        'execute_zap_in', 'execute_zap_out', 'execute_rebalance',
+        'enable_auto_manage', 'start_copy_lp',
+      ];
 
-When recommending actions, end with an action block:
-<action>
-{
-  "type": "ZAP_IN|ZAP_OUT|REBALANCE|COMPOUND",
-  "params": { ... }
-}
-</action>
+      const toolConfigs = {};
+      if (!autoExecute) {
+        EXECUTION_TOOLS.forEach(tool => { toolConfigs[tool] = { enabled: false }; });
+      }
 
-Context:
-${JSON.stringify(context, null, 2)}`;
+      const MCP_SERVER_URL = process.env.PUBLIC_URL
+        ? `${process.env.PUBLIC_URL}/mcp`
+        : `http://localhost:${process.env.PORT || 4000}/mcp`;
 
-      const stream = await anthropic.messages.create({
+      const stream = await anthropic.beta.messages.create({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
+        max_tokens: 1000,
         system: systemPrompt,
-        messages: messages.map((m) => ({
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.content,
-        })),
+        messages,
+        mcp_servers: [{ type: 'url', url: MCP_SERVER_URL, name: 'lp-scout' }],
+        tools: [{
+          type: 'mcp_toolset',
+          mcp_server_name: 'lp-scout',
+          ...(Object.keys(toolConfigs).length > 0 && { configs: toolConfigs })
+        }],
         stream: true,
+        betas: ['mcp-client-2025-11-20'],
       });
 
-      let fullResponse = '';
-
       for await (const chunk of stream) {
-        if (chunk.type === 'content_block_delta' && chunk.delta.text) {
-          fullResponse += chunk.delta.text;
-          res.write(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
+        if (chunk.type === 'content_block_delta') {
+          if (chunk.delta.type === 'text_delta') {
+            emit({ type: 'text', content: chunk.delta.text });
+          }
         }
+        if (chunk.type === 'content_block_start') {
+          if (chunk.content_block.type === 'mcp_tool_use') {
+            emit({ type: 'tool_call', tool: chunk.content_block.name, server: chunk.content_block.server_name, id: chunk.content_block.id });
+          }
+          if (chunk.content_block.type === 'mcp_tool_result') {
+            emit({ type: 'tool_result', toolUseId: chunk.content_block.tool_use_id, isError: chunk.content_block.is_error });
+          }
+        }
+        if (chunk.type === 'message_stop') { emit({ type: 'done' }); break; }
       }
 
-      // Parse any action blocks
-      const actionMatch = fullResponse.match(
-        /<action>([\s\S]*?)<\/action>/
-      );
-      if (actionMatch) {
-        try {
-          const action = JSON.parse(actionMatch[1].trim());
-          res.write(`data: ${JSON.stringify({ action })}\n\n`);
-        } catch (e) {
-          console.error('Failed to parse action block:', e);
-        }
-      }
-
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (error) {
-      console.error('Chat error:', error);
-      res.status(500).json({ error: error.message });
+      console.error('Chat MCP error:', error);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+      res.end();
     }
+  });
+
+  // POST /api/agent/chat/confirm - Execute with autoExecute: true
+  router.post('/chat/confirm', async (req, res) => {
+    req.body.autoExecute = true;
+    return router.handle(req, res);
   });
 
   return router;
@@ -351,6 +353,50 @@ function computeAgentScore(pool) {
     organic_score * 0.2 -
     Math.abs(price_24h_change) * 0.1;
   return score;
+}
+
+function buildMCPSystemPrompt(walletAddress, context) {
+  return `You are LP Scout — an elite autonomous Meteora LP agent on Solana.
+
+YOU HAVE DIRECT TOOL ACCESS. You don't suggest actions — you execute them.
+
+TOOL USAGE RULES:
+1. For any information request → call the relevant tool immediately
+2. For PREVIEW actions (preview_zap_in, preview_zap_out, preview_rebalance)
+   → always call these BEFORE execution tools
+3. For EXECUTION actions (execute_zap_in, execute_zap_out, execute_rebalance,
+   enable_auto_manage, start_copy_lp) → only call if user has confirmed,
+   or if they explicitly said "do it", "go ahead", "yes", "execute"
+4. Always call get_positions first when user asks about their portfolio
+5. Always call discover_pools first when user asks about best pools
+
+RESPONSE FORMAT:
+- Call tools silently — don't narrate that you're calling them
+- After tool results come back, summarize in max 3 lines
+- Always end with what just happened OR the next suggested action
+- Positive numbers get ↑, negative get ↓
+- Show SOL amounts to 4 decimal places
+
+PROACTIVE BEHAVIOR — after get_positions, automatically flag:
+- Any position where inRange=false → offer to rebalance immediately
+- Any position where pnl.percent < -10 → flag as stop-loss candidate
+- Any uncollectedFee > $5 → suggest collecting
+- Auto-manage OFF with 2+ positions → suggest enabling once per session
+
+FEE FRAMING:
+- Always mention fees naturally, never apologetically
+- "0.05% to enter — fair fee"
+- "0.5% on your profit — we earn together"
+- "No profit = no fee, always"
+- "0.02% rebalance fee — pays for itself in hours"
+
+JITO FRAMING — mention when executing:
+- "Sending via Jito atomic bundle — MEV-shielded"
+- "Both exit and re-entry land in the same block or neither does"
+- "Landed in Xs via Jito"
+
+CURRENT USER:
+Wallet: ${walletAddress || "not connected"}`;
 }
 
 async function executeZapIn(params) {
