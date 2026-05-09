@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, Zap } from 'lucide-react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { Pool, Position, PortfolioOverview } from '../lib/types';
 import { formatCurrency, formatPercent } from '../lib/utils';
 
@@ -28,15 +26,6 @@ export function Dashboard({
   onZapIn,
   onZapOut,
 }: DashboardProps) {
-  const { publicKey, connected, connecting } = useWallet();
-
-  // Update parent when wallet connects
-  if (connected && publicKey && !walletAddress) {
-    onWalletConnected(publicKey.toBase58());
-  } else if (!connected && walletAddress) {
-    onWalletConnected(null);
-  }
-
   const healthyCount = positions.filter((p) => p.isHealthy).length;
   const totalYield = positions.reduce((sum, p) => sum + (p.current_value_usd * p.dpr || 0), 0);
 
@@ -63,12 +52,14 @@ export function Dashboard({
             {!walletAddress ? (
               <motion.button
                 whileTap={{ scale: 0.95 }}
-                onClick={onConnectWallet}
-                disabled={connecting}
-                className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center gap-2"
+                onClick={() => {
+                  console.log('Connect button clicked');
+                  onConnectWallet();
+                }}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg flex items-center gap-2"
               >
                 <Wallet className="w-4 h-4" />
-                {connecting ? 'Connecting...' : 'Connect Wallet'}
+                Connect Wallet
               </motion.button>
             ) : (
               <div className="flex items-center gap-2">

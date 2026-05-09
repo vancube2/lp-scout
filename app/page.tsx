@@ -5,18 +5,30 @@ import { WalletProvider } from '../components/WalletProvider';
 import { Dashboard } from '../components/Dashboard';
 import { Pool, Position, PortfolioOverview } from '../lib/types';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { useWallet } from '@solana/wallet-adapter-react';
 
-function AppContent() {
+// Inner component that uses wallet hooks
+function WalletConnectedContent() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [pools, setPools] = useState<Pool[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [overview, setOverview] = useState<PortfolioOverview | null>(null);
-  const [isClient, setIsClient] = useState(false);
   const { setVisible: setWalletModalVisible } = useWalletModal();
+  const { publicKey, connected } = useWallet();
 
+  // Sync wallet state
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    if (connected && publicKey) {
+      const address = publicKey.toBase58();
+      console.log('Wallet connected:', address);
+      setWalletAddress(address);
+    } else {
+      if (walletAddress) {
+        console.log('Wallet disconnected');
+        setWalletAddress(null);
+      }
+    }
+  }, [connected, publicKey]);
 
   // Fetch pools on mount
   useEffect(() => {
@@ -75,15 +87,6 @@ function AppContent() {
     setWalletModalVisible(true);
   };
 
-  // Show loading state during SSR
-  if (!isClient) {
-    return (
-      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
-        <div className="text-[#94a3b8] animate-pulse">Loading LP Scout...</div>
-      </div>
-    );
-  }
-
   return (
     <Dashboard
       walletAddress={walletAddress}
@@ -101,7 +104,7 @@ function AppContent() {
 export default function Home() {
   return (
     <WalletProvider>
-      <AppContent />
+      <WalletConnectedContent />
     </WalletProvider>
   );
 }
