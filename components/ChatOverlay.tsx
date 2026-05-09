@@ -2,8 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, TrendingUp, ArrowRight } from 'lucide-react';
-import { Pool, Position, PortfolioOverview } from '../lib/types';
+import { X, Send, TrendingUp, ArrowRight, Loader2 } from 'lucide-react';
 
 interface ChatOverlayProps {
   walletAddress: string | null;
@@ -18,18 +17,74 @@ interface Message {
   actions?: any[];
 }
 
+interface ToolCall {
+  id: string;
+  tool: string;
+  status: 'pending' | 'completed' | 'error';
+}
+
+// Tool call indicator icons and labels
+const TOOL_CONFIG: Record<string, { icon: string; label: string }> = {
+  discover_pools: { icon: '🔍', label: 'Scanning pools...' },
+  get_positions: { icon: '📊', label: 'Loading positions...' },
+  get_portfolio_overview: { icon: '📈', label: 'Loading portfolio...' },
+  execute_zap_in: { icon: '⚡', label: 'Executing Zap-In...' },
+  execute_zap_out: { icon: '↗️', label: 'Executing Zap-Out...' },
+  execute_rebalance: { icon: '🔄', label: 'Submitting Jito bundle...' },
+  enable_auto_manage: { icon: '🤖', label: 'Configuring engine...' },
+  recommend_pool: { icon: '🎯', label: 'Analyzing pools...' },
+  create_chore: { icon: '📋', label: 'Setting up chore...' },
+  start_copy_lp: { icon: '👥', label: 'Starting copy LP...' },
+  preview_zap_in: { icon: '👁', label: 'Previewing Zap-In...' },
+  preview_zap_out: { icon: '👁', label: 'Previewing Zap-Out...' },
+  preview_rebalance: { icon: '👁', label: 'Previewing rebalance...' },
+  get_pool_detail: { icon: '🔎', label: 'Loading pool details...' },
+  get_top_lpers: { icon: '🏆', label: 'Loading top LPs...' },
+  get_engine_status: { icon: '⚙️', label: 'Checking engine...' },
+  get_chores: { icon: '📝', label: 'Loading chores...' },
+  get_jito_status: { icon: '⚡', label: 'Checking Jito status...' },
+  get_fee_estimate: { icon: '💰', label: 'Calculating fees...' },
+};
+
+// Tool call indicator component
+function ToolCallIndicator({ toolCall }: { toolCall: ToolCall }) {
+  const config = TOOL_CONFIG[toolCall.tool] || { icon: '⚙️', label: `Running ${toolCall.tool}...` };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className="flex items-center gap-2 px-3 py-2 bg-[#0f172a] border border-[#1e293b] rounded-lg"
+    >
+      <span className="text-sm">{config.icon}</span>
+      <span className="text-xs text-[#94a3b8]">{config.label}</span>
+      {toolCall.status === 'pending' && (
+        <Loader2 className="w-3 h-3 text-green-400 animate-spin ml-2" />
+      )}
+      {toolCall.status === 'completed' && (
+        <span className="text-green-400 text-xs ml-2">✓</span>
+      )}
+      {toolCall.status === 'error' && (
+        <span className="text-red-400 text-xs ml-2">✗</span>
+      )}
+    </motion.div>
+  );
+}
+
 export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'assistant',
       content: walletAddress
-        ? 'Yo. What\'s the move today?'
+        ? "Yo. What's the move today?"
         : 'Yo. Connect your wallet for personalized alpha.',
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -41,7 +96,7 @@ export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayPro
   // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, activeToolCalls]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -52,16 +107,17 @@ export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayPro
       content: input,
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setLoading(true);
+    setActiveToolCalls([]);
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({
+          messages: [...messages, userMessage].map((m) => ({
             role: m.role,
             content: m.content,
           })),
@@ -69,6 +125,7 @@ export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayPro
           context: {
             hasWallet: !!walletAddress,
           },
+          autoExecute: false, // Require confirmation for execution tools
         }),
       });
 
@@ -81,33 +138,73 @@ export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayPro
       const messageId = `assistant-${Date.now()}`;
 
       // Add placeholder for streaming message
-      setMessages(prev => [...prev, {
-        id: messageId,
-        role: 'assistant',
-        content: '',
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: messageId,
+          role: 'assistant',
+          content: '',
+        },
+      ]);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const text = new TextDecoder().decode(value);
-        const lines = text.split('\n').filter(line => line.startsWith('data: '));
+        const lines = text.split('\n').filter((line) => line.startsWith('data: '));
 
         for (const line of lines) {
           try {
             const data = JSON.parse(line.slice(6));
-            if (data.text) {
-              assistantMessage += data.text;
-              setMessages(prev => prev.map(m =>
-                m.id === messageId ? { ...m, content: assistantMessage } : m
-              ));
+
+            if (data.type === 'text' && data.content) {
+              assistantMessage += data.content;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === messageId ? { ...m, content: assistantMessage } : m
+                )
+              );
             }
-            if (data.action) {
-              // Handle action
+
+            if (data.type === 'tool_call') {
+              // Add tool call to active list
+              setActiveToolCalls((prev) => [
+                ...prev,
+                { id: data.id, tool: data.tool, status: 'pending' },
+              ]);
+            }
+
+            if (data.type === 'tool_result') {
+              // Update tool call status
+              setActiveToolCalls((prev) =>
+                prev.map((tc) =>
+                  tc.id === data.toolUseId
+                    ? { ...tc, status: data.isError ? 'error' : 'completed' }
+                    : tc
+                )
+              );
+            }
+
+            if (data.type === 'action') {
+              // Handle action (backward compatibility)
               console.log('Action received:', data.action);
+              onAction(data.action);
             }
-            if (data.done) {
+
+            if (data.type === 'error') {
+              console.error('Chat error:', data.message);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `error-${Date.now()}`,
+                  role: 'assistant',
+                  content: `Error: ${data.message}`,
+                },
+              ]);
+            }
+
+            if (data.type === 'done') {
               break;
             }
           } catch (e) {
@@ -117,13 +214,18 @@ export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayPro
       }
     } catch (err) {
       console.error('Chat error:', err);
-      setMessages(prev => [...prev, {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content: 'Sorry, something went wrong. Try again?',
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: 'Sorry, something went wrong. Try again?',
+        },
+      ]);
     } finally {
       setLoading(false);
+      // Clear tool calls after a delay
+      setTimeout(() => setActiveToolCalls([]), 3000);
     }
   };
 
@@ -166,20 +268,38 @@ export function ChatOverlay({ walletAddress, onClose, onAction }: ChatOverlayPro
               transition={{ delay: i === messages.length - 1 ? 0 : 0 }}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`
+              <div
+                className={`
                 max-w-[85%] rounded-2xl px-4 py-3
                 ${message.role === 'user'
                   ? 'bg-green-500 text-white'
                   : 'bg-[#0f172a] border border-[#1e293b] text-white'
                 }
-              `}>
+              `}
+              >
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
 
-        {loading && (
+        {/* Tool call indicators */}
+        <AnimatePresence>
+          {activeToolCalls.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-wrap gap-2"
+            >
+              {activeToolCalls.map((tc) => (
+                <ToolCallIndicator key={tc.id} toolCall={tc} />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {loading && activeToolCalls.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
