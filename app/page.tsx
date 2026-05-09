@@ -28,7 +28,7 @@ function WalletConnectedContent() {
         setWalletAddress(null);
       }
     }
-  }, [connected, publicKey]);
+  }, [connected, publicKey, walletAddress]);
 
   // Fetch pools on mount
   useEffect(() => {
@@ -101,10 +101,31 @@ function WalletConnectedContent() {
   );
 }
 
+// Wrapper to handle client-side only rendering
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <div className="text-[#94a3b8] animate-pulse">Loading LP Scout...</div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 export default function Home() {
   return (
-    <WalletProvider>
-      <WalletConnectedContent />
-    </WalletProvider>
+    <ClientOnly>
+      <WalletProvider>
+        <WalletConnectedContent />
+      </WalletProvider>
+    </ClientOnly>
   );
 }
