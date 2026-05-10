@@ -1,24 +1,33 @@
-import { Metadata } from 'next';
-import dynamic from 'next/dynamic';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'LP Scout - AI-Powered Meteora LP Agent',
-  description: 'Discover the best liquidity pools and manage positions with AI assistance',
-};
+import { useState, useEffect } from 'react';
 
-// Dynamic import with SSR disabled to prevent hydration issues with wallet adapters
-const ClientPage = dynamic(
-  () => import('./ClientPage').then((mod) => mod.ClientPage),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
-        <div className="text-[#94a3b8] animate-pulse">Loading LP Scout...</div>
-      </div>
-    )
+// Simple loading component
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+      <div className="text-[#94a3b8] animate-pulse">Loading LP Scout...</div>
+    </div>
+  );
+}
+
+// Main app component - only rendered client-side
+function AppContent() {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return <LoadingScreen />;
   }
-);
+
+  // Dynamically import the actual app to avoid SSR issues
+  const { ClientPage } = require('./ClientPage');
+  return <ClientPage />;
+}
 
 export default function Home() {
-  return <ClientPage />;
+  return <AppContent />;
 }
