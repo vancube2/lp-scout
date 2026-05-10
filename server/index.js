@@ -484,7 +484,7 @@ ${JSON.stringify(context, null, 2)}`;
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`LP Scout server running on port ${PORT}`);
   console.log(`Engine API available at /api/engine`);
   console.log(`Chores API available at /api/chores`);
