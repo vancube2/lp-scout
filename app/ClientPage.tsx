@@ -13,17 +13,28 @@ export function ClientPage() {
   const [overview, setOverview] = useState<PortfolioOverview | null>(null);
 
   const { setVisible: setWalletModalVisible } = useWalletModal();
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, connecting, wallet, wallets } = useWallet();
+
+  // Debug logging for wallet state
+  useEffect(() => {
+    console.log('[ClientPage] Wallet state:', {
+      connected,
+      connecting,
+      publicKey: publicKey?.toBase58() || null,
+      walletName: wallet?.adapter?.name || null,
+      availableWallets: wallets?.map(w => w.adapter.name) || [],
+    });
+  }, [connected, connecting, publicKey, wallet, wallets]);
 
   // Sync wallet state
   useEffect(() => {
     if (connected && publicKey) {
       const address = publicKey.toBase58();
-      console.log('Wallet connected:', address);
+      console.log('[ClientPage] Wallet connected:', address);
       setWalletAddress(address);
     } else {
       if (walletAddress) {
-        console.log('Wallet disconnected');
+        console.log('[ClientPage] Wallet disconnected');
         setWalletAddress(null);
       }
     }
@@ -33,16 +44,17 @@ export function ClientPage() {
   useEffect(() => {
     const fetchPools = async () => {
       try {
+        console.log('[ClientPage] Fetching pools...');
         const res = await fetch('/api/pools/discover?limit=10');
         if (res.ok) {
           const data = await res.json();
-          console.log('Pools fetched:', data.length);
+          console.log('[ClientPage] Pools fetched:', data.length);
           setPools(data.slice(0, 5));
         } else {
-          console.error('Failed to fetch pools:', res.status);
+          console.error('[ClientPage] Failed to fetch pools:', res.status);
         }
       } catch (err) {
-        console.error('Error fetching pools:', err);
+        console.error('[ClientPage] Error fetching pools:', err);
       }
     };
 
@@ -59,6 +71,7 @@ export function ClientPage() {
 
     const fetchData = async () => {
       try {
+        console.log('[ClientPage] Fetching wallet data for:', walletAddress);
         const [posRes, ovRes] = await Promise.all([
           fetch(`/api/positions/opening?owner=${walletAddress}`),
           fetch(`/api/positions/overview?owner=${walletAddress}`),
@@ -74,7 +87,7 @@ export function ClientPage() {
           setOverview(ovData.data || ovData);
         }
       } catch (err) {
-        console.error('Error fetching wallet data:', err);
+        console.error('[ClientPage] Error fetching wallet data:', err);
       }
     };
 
@@ -82,7 +95,7 @@ export function ClientPage() {
   }, [walletAddress]);
 
   const handleConnectWallet = () => {
-    console.log('Opening wallet modal...');
+    console.log('[ClientPage] Opening wallet modal...');
     setWalletModalVisible(true);
   };
 
@@ -94,8 +107,8 @@ export function ClientPage() {
       overview={overview}
       onConnectWallet={handleConnectWallet}
       onWalletConnected={setWalletAddress}
-      onZapIn={(pool) => console.log('Zap in:', pool)}
-      onZapOut={(position) => console.log('Zap out:', position)}
+      onZapIn={(pool) => console.log('[ClientPage] Zap in:', pool)}
+      onZapOut={(position) => console.log('[ClientPage] Zap out:', position)}
     />
   );
 }
