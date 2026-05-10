@@ -501,7 +501,7 @@ app.listen(PORT, () => {
 app.post('/mcp', async (req, res) => {
   try {
     // Dynamic import for ES modules
-    const { createLPScoutMCPServer } = await import('./mcp/lpScoutMCPServer.js');
+    const { createLPScoutMCPServer } = await import('./mcp/lpScoutMCPServer.mjs');
     const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
 
     const mcpServer = createLPScoutMCPServer();
