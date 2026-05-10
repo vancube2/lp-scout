@@ -1,29 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { WalletProvider } from '../components/WalletProvider';
+import { useState, useEffect } from 'react';
 import { Dashboard } from '../components/Dashboard';
-import { Pool, Position, PortfolioOverview } from '../lib/types';
+import { Pool } from '../lib/types';
 
-// Static version of dashboard without wallet
-function StaticDashboard() {
-  const [pools, setPools] = useState<Pool[]>([]);
-
-  useEffect(() => {
-    const fetchPools = async () => {
-      try {
-        const res = await fetch('/api/pools/discover?limit=10');
-        if (res.ok) {
-          const data = await res.json();
-          setPools(data.slice(0, 5));
-        }
-      } catch (err) {
-        console.error('Error fetching pools:', err);
-      }
-    };
-    fetchPools();
-  }, []);
-
+// Static dashboard without wallet
+function StaticDashboard({ pools }: { pools: Pool[] }) {
   return (
     <Dashboard
       walletAddress={null}
@@ -39,31 +21,54 @@ function StaticDashboard() {
 }
 
 export function ClientPage() {
-  const [WalletContent, setWalletContent] = useState<React.ComponentType | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+  const [pools, setPools] = useState<Pool[]>([]);
+  const [WalletContent, setWalletContent] = useState<any>(null);
+  const [isLoadingWallets, setIsLoadingWallets] = useState(true);
 
+  // Fetch pools first
   useEffect(() => {
-    // Dynamically import the wallet content component
-    import('../components/WalletContent')
-      .then((mod) => {
-        setWalletContent(() => mod.WalletContent);
-        setIsLoading(false);
+    console.log('[ClientPage] Fetching pools...');
+    fetch('/api/pools/discover?limit=10')
+      .then(res => res.json())
+      .then(data => {
+        console.log('[ClientPage] Pools loaded:', data.length);
+        setPools(data.slice(0, 5));
       })
-      .catch((err) => {
-        console.error('Failed to load WalletContent:', err);
-        setHasError(true);
-        setIsLoading(false);
-      });
+      .catch(err => console.error('[ClientPage] Failed to fetch pools:', err));
   }, []);
 
-  if (isLoading) {
-    return <StaticDashboard />;
+  // Load wallet content
+  useEffect(() => {
+    console.log('[ClientPage] Loading wallet content...');
+
+    // Delay wallet loading to ensure DOM is ready
+    const timer = setTimeout(() => {
+      import('../components/WalletContent')
+        .then(mod => {
+          console.log('[ClientPage] WalletContent loaded');
+          setWalletContent(() => mod.WalletContent);
+        })
+        .catch(err => {
+          console.error('[ClientPage] Failed to load WalletContent:', err);
+        })
+        .finally(() => {
+          setIsLoadingWallets(false);
+        });
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show static dashboard while loading
+  if (!WalletContent || isLoadingWallets) {
+    console.log('[ClientPage] Showing static dashboard');
+    return <StaticDashboard pools={pools} />;
   }
 
-  if (hasError || !WalletContent) {
-    return <StaticDashboard />;
-  }
+  console.log('[ClientPage] Showing wallet dashboard');
+
+  // Dynamically import WalletProvider
+  const WalletProvider = require('../components/WalletProvider').WalletProvider;
 
   return (
     <WalletProvider>
