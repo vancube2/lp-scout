@@ -7,6 +7,7 @@ import { Dashboard as DashboardUI } from "../components/Dashboard";
 import { Pool, Position, PortfolioOverview } from "../lib/types";
 
 export function Dashboard() {
+  const [mounted, setMounted] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [pools, setPools] = useState<Pool[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -14,6 +15,11 @@ export function Dashboard() {
 
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { publicKey, connected } = useWallet();
+
+  // Handle hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Sync wallet state
   useEffect(() => {
@@ -85,6 +91,15 @@ export function Dashboard() {
     console.log("Opening wallet modal...");
     setWalletModalVisible(true);
   };
+
+  // Prevent hydration mismatch - render loading state until client-side
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <div className="text-[#94a3b8] animate-pulse">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <DashboardUI
