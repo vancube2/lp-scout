@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { useWalletModal, WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { truncateAddress } from '../lib/utils';
 
@@ -42,29 +42,24 @@ export function WalletConnect({ onConnect }: WalletConnectProps) {
     );
   }
 
-  if (connected && publicKey) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-[#94a3b8] hidden sm:inline">
-          {truncateAddress(publicKey.toBase58())}
-        </span>
-        <button
-          onClick={() => disconnect()}
-          className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg font-medium transition-colors"
-        >
-          Disconnect
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <button
-      onClick={handleConnect}
-      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
-    >
-      Connect Wallet
-    </button>
+    <div className="wallet-button-container">
+      <style jsx global>{`
+        .wallet-button-container .wallet-adapter-button {
+          background-color: #22c55e !important;
+          border-radius: 0.5rem !important;
+          padding: 0.5rem 1rem !important;
+          font-weight: 500 !important;
+          height: 40px !important;
+          transition: background-color 0.2s !important;
+          font-family: inherit !important;
+        }
+        .wallet-button-container .wallet-adapter-button:hover {
+          background-color: #16a34a !important;
+        }
+      `}</style>
+      <WalletMultiButton />
+    </div>
   );
 }
 
