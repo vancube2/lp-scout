@@ -4,30 +4,44 @@ import { useState, useEffect } from 'react';
 import { WalletProvider } from '../components/WalletProvider';
 import { Dashboard } from '../components/Dashboard';
 import { Pool, Position, PortfolioOverview } from '../lib/types';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { useWallet } from '@solana/wallet-adapter-react';
 
+// Inner component that uses wallet hooks - must be inside WalletProvider
 function WalletConnectedContent() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [pools, setPools] = useState<Pool[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [overview, setOverview] = useState<PortfolioOverview | null>(null);
-  const { setVisible: setWalletModalVisible } = useWalletModal();
-  const { publicKey, connected } = useWallet();
+  const [walletError, setWalletError] = useState<string | null>(null);
+
+  // Dynamic import wallet hooks to avoid SSR issues
+  const [walletModal, setWalletModal] = useState<any>(null);
+  const [wallet, setWallet] = useState<any>(null);
+
+  useEffect(() => {
+    // Import wallet hooks dynamically after mount
+    Promise.all([
+      import('@solana/wallet-adapter-react-ui').then(mod => ({ setVisible: mod.useWalletModal().setVisible })),
+      import('@solana/wallet-adapter-react').then(mod => ({ publicKey: mod.useWallet().publicKey, connected: mod.useWallet().connected })),
+    ]).then(([modal, w]) => {
+      setWalletModal(modal);
+      setWallet(w);
+    }).catch(err => {
+      console.error('Failed to load wallet hooks:', err);
+      setWalletError('Wallet initialization failed');
+    });
+  }, []);
 
   // Sync wallet state
   useEffect(() => {
-    if (connected && publicKey) {
-      const address = publicKey.toBase58();
+    if (wallet?.connected && wallet?.publicKey) {
+      const address = wallet.publicKey.toBase58();
       console.log('Wallet connected:', address);
       setWalletAddress(address);
-    } else {
-      if (walletAddress) {
-        console.log('Wallet disconnected');
-        setWalletAddress(null);
-      }
+    } else if (!wallet?.connected && walletAddress) {
+      console.log('Wallet disconnected');
+      setWalletAddress(null);
     }
-  }, [connected, publicKey, walletAddress]);
+  }, [wallet?.connected, wallet?.publicKey, walletAddress]);
 
   // Fetch pools on mount
   useEffect(() => {
@@ -83,8 +97,28 @@ function WalletConnectedContent() {
 
   const handleConnectWallet = () => {
     console.log('Opening wallet modal...');
-    setWalletModalVisible(true);
+    if (walletModal) {
+      walletModal.setVisible(true);
+    } else {
+      console.error('Wallet modal not initialized');
+    }
   };
+
+  if (walletError) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <div className="text-red-400 text-center">
+          <p>Error: {walletError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-green-500 text-white rounded-lg"
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Dashboard
