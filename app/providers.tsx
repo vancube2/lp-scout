@@ -1,27 +1,40 @@
 "use client";
 
-import { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, useState, useEffect } from "react";
 import {
   ConnectionProvider,
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
+import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { clusterApiUrl } from "@solana/web3.js";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 export function SolanaProviders({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const endpoint = useMemo(
-    () =>
-      process.env.NEXT_PUBLIC_RPC_URL ||
-      clusterApiUrl("mainnet-beta"),
+    () => process.env.NEXT_PUBLIC_RPC_URL || clusterApiUrl("mainnet-beta"),
     []
   );
 
-  const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    []
-  );
+  const wallets = useMemo(() => {
+    if (typeof window === "undefined") return [];
+    return [new PhantomWalletAdapter()];
+  }, []);
+
+  // Prevent hydration mismatch - wait for client mount
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
+        <div className="text-[#94a3b8] animate-pulse">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <ConnectionProvider endpoint={endpoint}>
@@ -30,9 +43,7 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
         autoConnect={false}
         onError={(error) => console.warn("Wallet error:", error.message)}
       >
-        <WalletModalProvider>
-          {children}
-        </WalletModalProvider>
+        <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );
