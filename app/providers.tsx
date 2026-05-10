@@ -7,6 +7,9 @@ import {
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { clusterApiUrl } from "@solana/web3.js";
+import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
+import { BackpackWalletAdapter } from "@solana/wallet-adapter-backpack";
+import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 export function SolanaProviders({ children }: { children: ReactNode }) {
@@ -15,15 +18,20 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
     []
   );
 
-  // Empty wallets array - Phantom and Solflare are auto-detected via Wallet Standard
-  // No SSR issues since we're not instantiating any adapters that access window
-  const wallets = useMemo(() => [], []);
+  const wallets = useMemo(
+    () => [
+      new PhantomWalletAdapter(),
+      new BackpackWalletAdapter(),
+      new SolflareWalletAdapter(),
+    ],
+    []
+  );
 
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider
         wallets={wallets}
-        autoConnect={false}
+        autoConnect={true}
         onError={(error) => console.warn("Wallet error:", error.message)}
       >
         <WalletModalProvider>{children}</WalletModalProvider>
