@@ -1,78 +1,101 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { Dashboard } from '../components/Dashboard';
-import { Pool } from '../lib/types';
-
-// Static dashboard without wallet
-function StaticDashboard({ pools }: { pools: Pool[] }) {
-  return (
-    <Dashboard
-      walletAddress={null}
-      positions={[]}
-      pools={pools}
-      overview={null}
-      onConnectWallet={() => {}}
-      onWalletConnected={() => {}}
-      onZapIn={() => {}}
-      onZapOut={() => {}}
-    />
-  );
-}
+import { Pool, Position, PortfolioOverview } from '../lib/types';
 
 export function ClientPage() {
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [pools, setPools] = useState<Pool[]>([]);
-  const [WalletContent, setWalletContent] = useState<any>(null);
-  const [isLoadingWallets, setIsLoadingWallets] = useState(true);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [overview, setOverview] = useState<PortfolioOverview | null>(null);
 
-  // Fetch pools first
+  const { setVisible: setWalletModalVisible } = useWalletModal();
+  const { publicKey, connected } = useWallet();
+
+  // Sync wallet state
   useEffect(() => {
-    console.log('[ClientPage] Fetching pools...');
-    fetch('/api/pools/discover?limit=10')
-      .then(res => res.json())
-      .then(data => {
-        console.log('[ClientPage] Pools loaded:', data.length);
-        setPools(data.slice(0, 5));
-      })
-      .catch(err => console.error('[ClientPage] Failed to fetch pools:', err));
+    if (connected && publicKey) {
+      const address = publicKey.toBase58();
+      console.log('Wallet connected:', address);
+      setWalletAddress(address);
+    } else {
+      if (walletAddress) {
+        console.log('Wallet disconnected');
+        setWalletAddress(null);
+      }
+    }
+  }, [connected, publicKey, walletAddress]);
+
+  // Fetch pools on mount
+  useEffect(() => {
+    const fetchPools = async () => {
+      try {
+        const res = await fetch('/api/pools/discover?limit=10');
+        if (res.ok) {
+          const data = await res.json();
+          console.log('Pools fetched:', data.length);
+          setPools(data.slice(0, 5));
+        } else {
+          console.error('Failed to fetch pools:', res.status);
+        }
+      } catch (err) {
+        console.error('Error fetching pools:', err);
+      }
+    };
+
+    fetchPools();
   }, []);
 
-  // Load wallet content
+  // Fetch positions when wallet connects
   useEffect(() => {
-    console.log('[ClientPage] Loading wallet content...');
+    if (!walletAddress) {
+      setPositions([]);
+      setOverview(null);
+      return;
+    }
 
-    // Delay wallet loading to ensure DOM is ready
-    const timer = setTimeout(() => {
-      import('../components/WalletContent')
-        .then(mod => {
-          console.log('[ClientPage] WalletContent loaded');
-          setWalletContent(() => mod.WalletContent);
-        })
-        .catch(err => {
-          console.error('[ClientPage] Failed to load WalletContent:', err);
-        })
-        .finally(() => {
-          setIsLoadingWallets(false);
-        });
-    }, 100);
+    const fetchData = async () => {
+      try {
+        const [posRes, ovRes] = await Promise.all([
+          fetch(`/api/positions/opening?owner=${walletAddress}`),
+          fetch(`/api/positions/overview?owner=${walletAddress}`),
+        ]);
 
-    return () => clearTimeout(timer);
-  }, []);
+        if (posRes.ok) {
+          const posData = await posRes.json();
+          setPositions(posData);
+        }
 
-  // Show static dashboard while loading
-  if (!WalletContent || isLoadingWallets) {
-    console.log('[ClientPage] Showing static dashboard');
-    return <StaticDashboard pools={pools} />;
-  }
+        if (ovRes.ok) {
+          const ovData = await ovRes.json();
+          setOverview(ovData.data || ovData);
+        }
+      } catch (err) {
+        console.error('Error fetching wallet data:', err);
+      }
+    };
 
-  console.log('[ClientPage] Showing wallet dashboard');
+    fetchData();
+  }, [walletAddress]);
 
-  // Dynamically import WalletProvider
-  const WalletProvider = require('../components/WalletProvider').WalletProvider;
+  const handleConnectWallet = () => {
+    console.log('Opening wallet modal...');
+    setWalletModalVisible(true);
+  };
 
   return (
-    <WalletProvider>
-      <WalletContent />
-    </WalletProvider>
+    <Dashboard
+      walletAddress={walletAddress}
+      positions={positions}
+      pools={pools}
+      overview={overview}
+      onConnectWallet={handleConnectWallet}
+      onWalletConnected={setWalletAddress}
+      onZapIn={(pool) => console.log('Zap in:', pool)}
+      onZapOut={(position) => console.log('Zap out:', position)}
+    />
   );
 }

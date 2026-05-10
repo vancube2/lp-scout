@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ClientPage } from './ClientPage';
 
 // Simple loading component
 function LoadingScreen() {
@@ -11,23 +12,17 @@ function LoadingScreen() {
   );
 }
 
-// Main app component - only rendered client-side
-function AppContent() {
+export default function Home() {
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  // Prevent hydration mismatch - don't render app until client-side
   if (!isClient) {
     return <LoadingScreen />;
   }
 
-  // Dynamically import the actual app to avoid SSR issues
-  const { ClientPage } = require('./ClientPage');
   return <ClientPage />;
-}
-
-export default function Home() {
-  return <AppContent />;
 }
