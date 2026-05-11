@@ -1,2 +1,5 @@
 [phases.setup]
 aptPkgs = ["python3", "build-essential", "libusb-1.0-0-dev", "libudev-dev", "pkg-config"]
+
+[phases.build]
+cmds = ["npm install", "npm run build"]

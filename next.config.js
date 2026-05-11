@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
+  distDir: '.next',
   transpilePackages: [
     '@solana/wallet-adapter-react',
     '@solana/wallet-adapter-react-ui',
