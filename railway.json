@@ -6,6 +6,9 @@
   "deploy": {
     "startCommand": "node .next/standalone/server.js",
     "healthcheckPath": "/",
-    "healthcheckTimeout": 100
+    "healthcheckTimeout": 100,
+    "environment": {
+      "HOSTNAME": "0.0.0.0"
+    }
   }
 }
