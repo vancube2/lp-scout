@@ -1,102 +1,73 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { Dashboard as DashboardUI } from "../components/Dashboard";
-import { Pool, Position, PortfolioOverview } from "../lib/types";
+import { useState, useEffect } from 'react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Dashboard as DashboardUI } from '../components/Dashboard';
+import { OrcaPool, OrcaPosition, PortfolioOverview } from '../lib/types';
 
 export function Dashboard() {
   const [mounted, setMounted] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [pools, setPools] = useState<Pool[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
+  const [pools, setPools] = useState<OrcaPool[]>([]);
+  const [positions, setPositions] = useState<OrcaPosition[]>([]);
   const [overview, setOverview] = useState<PortfolioOverview | null>(null);
 
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { publicKey, connected } = useWallet();
 
-  // Handle hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
-  // Sync wallet state
   useEffect(() => {
     if (connected && publicKey) {
-      const address = publicKey.toBase58();
-      console.log("Wallet connected:", address);
-      setWalletAddress(address);
+      setWalletAddress(publicKey.toBase58());
     } else {
-      if (walletAddress) {
-        console.log("Wallet disconnected");
-        setWalletAddress(null);
-      }
+      if (walletAddress) setWalletAddress(null);
     }
   }, [connected, publicKey, walletAddress]);
 
-  // Fetch pools on mount
   useEffect(() => {
     const fetchPools = async () => {
       try {
-        const res = await fetch("/api/pools/discover?limit=10");
+        const res = await fetch('/api/pools/discover?limit=10');
         if (res.ok) {
           const data = await res.json();
-          console.log("Pools fetched:", data.length);
           setPools(data.slice(0, 5));
-        } else {
-          console.error("Failed to fetch pools:", res.status);
         }
       } catch (err) {
-        console.error("Error fetching pools:", err);
+        console.error('Error fetching pools:', err);
       }
     };
-
     fetchPools();
   }, []);
 
-  // Fetch positions when wallet connects
   useEffect(() => {
     if (!walletAddress) {
       setPositions([]);
       setOverview(null);
       return;
     }
-
     const fetchData = async () => {
       try {
         const [posRes, ovRes] = await Promise.all([
-          fetch(`/api/positions/opening?owner=${walletAddress}`),
-          fetch(`/api/positions/overview?owner=${walletAddress}`),
+          fetch('/api/positions/opening?owner=' + walletAddress),
+          fetch('/api/positions/overview?owner=' + walletAddress),
         ]);
-
-        if (posRes.ok) {
-          const posData = await posRes.json();
-          setPositions(posData);
-        }
-
-        if (ovRes.ok) {
-          const ovData = await ovRes.json();
-          setOverview(ovData.data || ovData);
-        }
+        if (posRes.ok) setPositions(await posRes.json());
+        if (ovRes.ok) setOverview(await ovRes.json());
       } catch (err) {
-        console.error("Error fetching wallet data:", err);
+        console.error('Error fetching wallet data:', err);
       }
     };
-
     fetchData();
   }, [walletAddress]);
 
-  const handleConnectWallet = () => {
-    console.log("Opening wallet modal...");
-    setWalletModalVisible(true);
-  };
+  const handleConnectWallet = () => setWalletModalVisible(true);
 
-  // Prevent hydration mismatch - render loading state until client-side
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-[#030712] flex items-center justify-center">
-        <div className="text-[#94a3b8] animate-pulse">Loading...</div>
+      <div className='min-h-screen bg-[#030712] flex items-center justify-center'>
+        <div className='text-[#94a3b8] animate-pulse'>Loading Orca LP Agent...</div>
       </div>
     );
   }
@@ -109,8 +80,8 @@ export function Dashboard() {
       overview={overview}
       onConnectWallet={handleConnectWallet}
       onWalletConnected={setWalletAddress}
-      onZapIn={(pool) => console.log("Zap in:", pool)}
-      onZapOut={(position) => console.log("Zap out:", position)}
+      onZapIn={(pool) => console.log('Zap in:', pool)}
+      onZapOut={(position) => console.log('Zap out:', position)}
     />
   );
 }

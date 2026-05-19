@@ -1,4 +1,4 @@
-export interface Pool {
+export interface OrcaPool {
   address: string;
   name: string;
   token0_symbol: string;
@@ -7,16 +7,19 @@ export interface Pool {
   token1_mint: string;
   tvl: number;
   vol_24h: number;
-  fee: number;
-  organic_score: number;
+  fee_rate: number; // e.g., 0.0005 for 0.05%
+  tick_spacing: number;
   price_24h_change: number;
+  organic_score: number;
   agentScore?: number;
-  bin_step?: number;
-  base_fee?: number;
+  current_price?: number;
+  fee_tier_label?: string; // e.g., '0.05%'
+  liquidity?: number;
+  reward_mints?: string[];
 }
 
-export interface Position {
-  id: string;
+export interface OrcaPosition {
+  id: string; // position mint address
   pool_address: string;
   token0_symbol: string;
   token1_symbol: string;
@@ -25,13 +28,15 @@ export interface Position {
     percent: number;
     usd: number;
   };
-  dpr: number;
+  dpr: number; // daily percentage return
   inRange: boolean;
   uncollected_fees_usd: number;
   age_days: number;
   isHealthy?: boolean;
-  bin_lower?: number;
-  bin_upper?: number;
+  tick_lower: number;
+  tick_upper: number;
+  liquidity: number;
+  fee_tier: number;
 }
 
 export interface PortfolioOverview {
@@ -45,8 +50,9 @@ export interface PortfolioOverview {
 export interface ZapInParams {
   owner: string;
   inputSOL: number;
-  strategy: 'Spot' | 'Curve' | 'BidAsk';
+  strategy: 'FullRange' | 'Narrow' | 'Wide' | 'Custom';
   slippage_bps: number;
+  fee_tier?: number;
 }
 
 export interface ZapResult {
@@ -72,12 +78,32 @@ export interface ActionData {
   positionId?: string;
   inputSOL?: number;
   bps?: number;
-  strategy?: 'Spot' | 'Curve' | 'BidAsk';
+  strategy?: 'FullRange' | 'Narrow' | 'Wide' | 'Custom';
   reason: string;
 }
 
 export interface ChatContext {
-  topPools: Pool[];
-  openPositions: Position[];
+  topPools: OrcaPool[];
+  openPositions: OrcaPosition[];
   portfolioOverview: PortfolioOverview | null;
 }
+
+export interface FeeTierRecommendation {
+  pool_pair: string;
+  recommended_tier: number;
+  recommended_label: string;
+  reason: string;
+  expected_apr: number;
+}
+
+export interface ILProjection {
+  position_id: string;
+  price_change_pct: number;
+  projected_il_pct: number;
+  projected_value_usd: number;
+  hedge_suggestion?: string;
+}
+
+export type Pool = OrcaPool;
+export type Position = OrcaPosition;
+

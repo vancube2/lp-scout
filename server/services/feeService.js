@@ -1,19 +1,21 @@
 /**
- * Fee Service - LP Scout Revenue System
- * Transparent fees: we only earn when users earn
+ * Fee Service - Orca LP Agent Revenue System
+ * Transparent fees: we only earn when users earn or transact
+ * Fee-only model - no subscriptions
  */
 
-const FEE_WALLET = process.env.LP_SCOUT_FEE_WALLET;
+const FEE_WALLET = process.env.ORCA_LP_FEE_WALLET;
 
 const FEES = {
-  ZAP_IN_BPS: 5,         // 0.05%
+  ZAP_IN_BPS: 5,         // 0.05% on entry
   PERFORMANCE_BPS: 50,   // 0.5% of profit only
-  REBALANCE_BPS: 2,      // 0.02%
+  REBALANCE_BPS: 2,      // 0.02% per rebalance
   YIELD_SHARE_BPS: 500,  // 5% of fees earned
-  AGENT_ROUTING_BPS: 3,  // 0.03%
+  AUTO_COMPOUND_BPS: 100, // 1% of compounded amount
+  COPY_TRADING_BPS: 200, // 2% of follower yield
+  FEE_TIER_ADVICE_BPS: 3, // 0.03% on routed volume
 };
 
-// Fee calculations — all return SOL amounts
 function zapInFee(depositSOL) {
   return depositSOL * (FEES.ZAP_IN_BPS / 10000);
 }
@@ -32,77 +34,52 @@ function yieldShareFee(collectedFeesSOL) {
   return collectedFeesSOL * (FEES.YIELD_SHARE_BPS / 10000);
 }
 
-function agentRoutingFee(routedSOL) {
-  return routedSOL * (FEES.AGENT_ROUTING_BPS / 10000);
+function autoCompoundFee(compoundedSOL) {
+  return compoundedSOL * (FEES.AUTO_COMPOUND_BPS / 10000);
+}
+
+function copyTradingFee(followerYieldSOL) {
+  return followerYieldSOL * (FEES.COPY_TRADING_BPS / 10000);
 }
 
 function buildFeeBreakdown(action, params) {
   switch (action) {
     case 'ZAP_IN': {
       const fee = zapInFee(params.depositSOL);
-      return {
-        fee,
-        feeSOL: fee.toFixed(6),
-        label: `LP Scout fee: ${fee.toFixed(6)} SOL (0.05%)`,
-        netDeposit: params.depositSOL - fee,
-        frameLine: null,
-      };
+      return { fee, feeSOL: fee.toFixed(6), label: `Orca LP Agent fee: ${fee.toFixed(6)} SOL (0.05%)`, netDeposit: params.depositSOL - fee, frameLine: null };
     }
     case 'ZAP_OUT': {
       const fee = performanceFee(params.positionValueSOL, params.pnlPercent);
       const yieldFee = yieldShareFee(params.uncollectedFeesSOL || 0);
       const totalFee = fee + yieldFee;
-      return {
-        fee: totalFee,
-        feeSOL: totalFee.toFixed(6),
-        performanceFee: fee.toFixed(6),
-        yieldFee: yieldFee.toFixed(6),
-        label: totalFee > 0
-          ? `LP Scout fee: ${totalFee.toFixed(6)} SOL`
-          : `No fee — LP Scout only earns when you do`,
-        frameLine: fee > 0
-          ? `0.5% on your gain — you're up, we earn together`
-          : `No profit, no fee. Always.`,
-        netReceive: params.positionValueSOL - totalFee,
-      };
+      return { fee: totalFee, feeSOL: totalFee.toFixed(6), performanceFee: fee.toFixed(6), yieldFee: yieldFee.toFixed(6), label: totalFee > 0 ? `Orca LP Agent fee: ${totalFee.toFixed(6)} SOL` : `No fee - we only earn when you do`, frameLine: fee > 0 ? `0.5% on your gain - you are up, we earn together` : `No profit, no fee. Always.`, netReceive: params.positionValueSOL - totalFee };
     }
     case 'REBALANCE': {
       const fee = rebalanceFee(params.positionValueSOL);
-      return {
-        fee,
-        feeSOL: fee.toFixed(6),
-        label: `Rebalance fee: ${fee.toFixed(6)} SOL (0.02%)`,
-        frameLine: `Engine pays for itself in hours of fees earned`,
-      };
+      return { fee, feeSOL: fee.toFixed(6), label: `Rebalance fee: ${fee.toFixed(6)} SOL (0.02%)`, frameLine: `Engine pays for itself in hours of fees earned` };
     }
     case 'YIELD': {
       const fee = yieldShareFee(params.collectedFeesSOL);
-      return {
-        fee,
-        feeSOL: fee.toFixed(6),
-        label: `Yield share: ${fee.toFixed(6)} SOL (5% of earned fees)`,
-        netYield: params.collectedFeesSOL - fee,
-        frameLine: `95% of your fees, kept by you`,
-      };
+      return { fee, feeSOL: fee.toFixed(6), label: `Yield share: ${fee.toFixed(6)} SOL (5% of earned fees)`, netYield: params.collectedFeesSOL - fee, frameLine: `95% of your fees, kept by you` };
+    }
+    case 'AUTO_COMPOUND': {
+      const fee = autoCompoundFee(params.compoundedSOL);
+      return { fee, feeSOL: fee.toFixed(6), label: `Auto-compound fee: ${fee.toFixed(6)} SOL (1%)`, frameLine: `Set and forget - we handle the rest` };
+    }
+    case 'COPY_TRADE': {
+      const fee = copyTradingFee(params.followerYieldSOL);
+      return { fee, feeSOL: fee.toFixed(6), label: `Copy fee: ${fee.toFixed(6)} SOL (2% of yield)`, frameLine: `Mirror top LPs - performance-based fee only` };
     }
     default:
       return { fee: 0, label: 'No fee', frameLine: null };
   }
 }
 
-// Revenue tracking
 const revenueLog = [];
-let totalRevenue = { ZAP_IN: 0, ZAP_OUT: 0, REBALANCE: 0, YIELD: 0, AGENT: 0 };
+let totalRevenue = { ZAP_IN: 0, ZAP_OUT: 0, REBALANCE: 0, YIELD: 0, AUTO_COMPOUND: 0, COPY_TRADE: 0, AGENT: 0 };
 
 function trackRevenue(action, feeSOL, wallet, meta = {}) {
-  const entry = {
-    id: Date.now(),
-    timestamp: new Date().toISOString(),
-    action,
-    feeSOL,
-    wallet: wallet ? wallet.slice(0, 8) + '...' : 'agent',
-    meta,
-  };
+  const entry = { id: Date.now(), timestamp: new Date().toISOString(), action, feeSOL, wallet: wallet ? wallet.slice(0, 8) + '...' : 'agent', meta };
   revenueLog.unshift(entry);
   if (revenueLog.length > 500) revenueLog.pop();
   totalRevenue[action] = (totalRevenue[action] || 0) + feeSOL;
@@ -110,12 +87,7 @@ function trackRevenue(action, feeSOL, wallet, meta = {}) {
 
 function getRevenueSummary() {
   const total = Object.values(totalRevenue).reduce((s, v) => s + v, 0);
-  return {
-    totalSOL: total.toFixed(6),
-    byAction: totalRevenue,
-    recentLog: revenueLog.slice(0, 50),
-    projectedMonthlySOL: (total * 30).toFixed(2),
-  };
+  return { totalSOL: total.toFixed(6), byAction: totalRevenue, recentLog: revenueLog.slice(0, 50), projectedMonthlySOL: (total * 30).toFixed(2) };
 }
 
 module.exports = {
@@ -123,7 +95,8 @@ module.exports = {
   performanceFee,
   rebalanceFee,
   yieldShareFee,
-  agentRoutingFee,
+  autoCompoundFee,
+  copyTradingFee,
   buildFeeBreakdown,
   trackRevenue,
   getRevenueSummary,

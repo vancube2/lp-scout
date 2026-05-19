@@ -1,38 +1,75 @@
-# LP Scout
+# Orca LP Agent
 
-AI-powered Meteora liquidity pool agent. Discover the best pools, manage positions, and execute Zap-In/Zap-Out operations with AI assistance. Now featuring autonomous rebalancing, chore automation, and copy trading.
+AI-powered Orca Whirlpools liquidity management platform. Discover the best pools, manage concentrated liquidity positions, and optimize yield with AI assistance. Built exclusively for the Orca ecosystem on Solana.
+
+## What Makes This Different
+
+- **Orca-Only**: Every feature, every recommendation, every data point is tailored specifically for Orca Whirlpools
+- **Fee-Only Revenue**: No subscriptions, no paywalls. We only earn when you earn or transact. Transparent fees shown before every action.
+- **Concentrated Liquidity Native**: Built from the ground up for Orca's tick-based concentrated liquidity model (not retrofitted from bin-based systems)
+- **Ecosystem-Beneficial**: Features designed to grow Orca TVL, help new projects bootstrap liquidity, and make Orca the default LP destination
 
 ## Features
 
-- **AI Chat Agent**: Get personalized LP recommendations with real-time data
-- **Pool Discovery**: Ranked pools by agentScore (composite of yield, volume, and quality)
-- **Position Monitoring**: Real-time tracking of open positions with health indicators
-- **Zap In/Out**: One-click entry and exit with strategy selection
-- **Wallet Integration**: Phantom and Backpack wallet support
+### Core
+- **Pool Discovery**: Ranked Orca pools by agentScore (composite of yield, volume, quality, and fee tier optimization)
+- **Position Monitoring**: Real-time tracking of open Orca positions with health indicators, tick range status, and uncollected fees
+- **Zap In/Out**: One-click entry and exit with strategy selection (Full Range, Narrow, Wide, Custom)
+- **Wallet Integration**: Phantom, Backpack, Solflare support via Solana Wallet Adapter
+
+### Orca-Specific Intelligence
+- **Fee Tier Optimizer**: Automatically recommends the optimal Orca fee tier (0.01%, 0.05%, 0.30%, 1.00%) based on pair volatility and historical data
+- **Tick Range Advisor**: Suggests optimal tick ranges for each strategy type
+- **IL Projection Calculator**: Real-time impermanent loss projections with hedge suggestions
+- **Pool Depth Visualizer**: Shows liquidity distribution across price ticks for any Orca pool
+- **Cross-Tier Yield Comparison**: Compare the same token pair across different Orca fee tiers to find the best APR
+
+### Automation
 - **Rebalance Engine**: Autonomous position rebalancing with configurable parameters
-- **Chore System**: Natural language task automation
-- **Copy LP**: Mirror top-performing liquidity providers
-- **MCP Server**: Model Context Protocol for agent interoperability
+- **Auto-Compound**: Automatically collect and reinvest earned fees back into position
+- **Chore System**: Natural language task automation ('Rebalance my SOL-USDC position when it goes out of range')
+- **Copy LP**: Mirror top-performing Orca liquidity providers
+
+### AI Chat
+- **Orca-Native AI**: Claude-powered assistant trained specifically on Orca Whirlpools mechanics, fee structures, and strategies
+- **Personalized Advice**: Analyzes your actual holdings when wallet is connected
+- **Market Insights**: Real-time analysis of top pools, volume spikes, and opportunity alerts
+
+## Fee Structure (Fee-Only Model)
+
+We believe in aligned incentives. No monthly fees. No subscription tiers. You only pay when the product creates value for you.
+
+| Action | Fee | When Applied |
+|--------|-----|--------------|
+| Zap In | 0.05% | On deposit into pool |
+| Performance | 0.5% | On profit when exiting (no profit = no fee) |
+| Rebalance | 0.02% | Per automated rebalance execution |
+| Yield Share | 5% | Of fees earned (collected via auto-harvest) |
+| Auto-Compound | 1% | Of compounded amount |
+| Copy Trading | 2% | Of follower yield (paid by follower, to original LP) |
+
+**Transparency**: Every fee is shown in the UI before you confirm any transaction. We never hide fees or charge subscription fees.
+
+## How This Benefits the Orca Ecosystem
+
+1. **TVL Growth**: By making LPing easier and more profitable, we attract more liquidity to Orca pools
+2. **New Project Bootstrapping**: Fee Tier Optimizer and Pool Discovery help new tokens choose Orca as their primary DEX
+3. **Educational Value**: AI chat and IL projections help users understand concentrated liquidity, reducing bad experiences and churn
+4. **Volume Retention**: By optimizing fee tiers and ranges, we ensure pools capture maximum trading volume
+5. **Data Transparency**: Pool depth visualizer and cross-tier comparisons showcase Orca's efficient capital utilization
+6. **User Migration**: Tools and analytics that demonstrate Orca's advantages over other DEXs
 
 ## Architecture
 
 - **Frontend**: Next.js 14 + TailwindCSS + shadcn/ui
 - **Backend**: Node.js + Express
-- **AI**: Anthropic Claude API
+- **AI**: Anthropic Claude API (Orca-specialized prompts)
 - **Blockchain**: Solana (mainnet-beta)
-- **LP Data**: LP Agent API
-- **MCP**: Model Context Protocol server on port 4001
-
-## Prerequisites
-
-- Node.js 18+
-- LP Agent API key (get from [lpagent.io](https://lpagent.io))
-- Anthropic API key
-- Solana wallet (Phantom or Backpack)
+- **LP Data**: Orca Whirlpools SDK + Custom Indexer
 
 ## Setup
 
-### 1. Clone and Install
+### 1. Install Dependencies
 
 ```bash
 cd lp-scout
@@ -46,17 +83,17 @@ cd ..
 
 ### 2. Environment Variables
 
-Create `.env.local` in the root directory:
+Create `.env.local` in the root:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:4000
 ```
 
 Create `.env` in the `server` directory:
 ```env
-LP_AGENT_API_KEY=your_lp_agent_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
 PORT=4000
 # Optional: SOLANA_PRIVATE_KEY=your_private_key_for_server_signing
+# Optional: ORCA_LP_FEE_WALLET=your_fee_collection_wallet
 ```
 
 ### 3. Run Development Servers
@@ -73,193 +110,46 @@ cd lp-scout
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open http://localhost:3000 in your browser.
 
-The MCP server runs automatically on port 4001.
+## API Endpoints
 
-## Usage
+### Agent
+- `GET /api/agent/pools` - Get top Orca pools with agentScore
+- `GET /api/agent/positions/:owner` - Get Orca positions for wallet
+- `POST /api/agent/analyze` - Analyze wallet portfolio
+- `POST /api/agent/recommend` - Get AI recommendations
+- `GET /api/agent/fee-tier/:pair` - Fee tier recommendation
+- `GET /api/agent/il-projection/:positionId` - IL projection
+- `GET /api/agent/pool-depth/:poolAddress` - Liquidity depth
 
-1. Connect your Solana wallet (Phantom or Backpack)
-2. The AI agent will automatically analyze your portfolio
-3. Browse top-ranked pools in the Pool Discovery tab
-4. Chat with LP Scout for personalized recommendations
-5. Click "Enter Pool" to Zap In with your chosen strategy
-6. Monitor positions in the left panel
-7. Exit positions via Zap Out when recommended
-8. Configure the Rebalance Engine for autonomous management
-9. Use the Copy LP tab to mirror top performers
-10. Create chores via natural language instructions
+### Core
+- `GET /api/pools/discover` - Discover top Orca pools
+- `GET /api/positions/opening` - Get open positions
+- `GET /api/positions/overview` - Portfolio overview
 
-## UI Layout
+## Revenue Projections
 
-The 4-panel layout provides:
-- **Left (25%)**: Position Panel - Your open positions with health indicators
-- **Center (35%)**: Chat - AI assistant with alerts and action cards
-- **Top Right (20%)**: Engine Panel - Autonomous rebalancing controls
-- **Bottom Right (20%)**: Pool Discovery / Copy LP - Toggle between tabs
+With the fee-only model, revenue scales with user activity and TVL managed:
 
-## Rebalance Engine
+- **Conservative**: 100 active users, $5M TVL managed = ~$500-1000/month in fees
+- **Growth**: 1,000 active users, $50M TVL = ~$5,000-15,000/month
+- **Scale**: 10,000+ users, $500M+ TVL = ~$50,000-150,000/month
 
-Configure autonomous position management:
-- **Strategy**: Spot, Curve, or BidAsk
-- **Bin Range**: 20-70 bins
-- **Stop Loss**: -30% to -5%
-- **Max Rebalances/Day**: 1-20
+Key growth levers:
+1. Auto-compound adoption (recurring fee stream)
+2. Copy-trading network effects
+3. Protocol integrations (new projects using our bootstrapper)
+4. Whale LP management (high-value accounts)
 
-The engine monitors positions every 60 seconds and auto-rebalances when:
-- Position goes out of range
-- Volatility threshold exceeded
-- Stop loss triggered
-- Better opportunities detected
+## Future Roadmap
 
-## Chore System
-
-Create natural language tasks:
-- "Rebalance my SOL-USDC position when it goes out of range"
-- "Alert me when any position drops below -10% PnL"
-- "Compound fees every 24 hours"
-- "Exit all positions if TVL drops below $1M"
-
-Chores are executed automatically based on conditions.
-
-## Copy LP
-
-Mirror top-performing liquidity providers:
-- View ranked LPer list by score (PnL, win rate, diversification)
-- Set maximum allocation limit
-- Automatically copy position entries/exits
-- Track mirror performance vs original
-
-## Strategy Guide
-
-- **Spot**: Equal distribution. Best for stable pairs like USDC/USDT.
-- **Curve**: Concentrated around current price. Best for correlated assets like SOL/stSOL.
-- **BidAsk**: Wide range. Best for volatile/directional pairs.
-
-## API Endpoints (Backend)
-
-### Core Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/pools/discover` | Get top pools with agentScore |
-| GET | `/api/pools/:poolId` | Get pool details |
-| GET | `/api/pools/:poolId/stats` | Get on-chain stats |
-| GET | `/api/positions/opening` | Get open positions for wallet |
-| GET | `/api/positions/overview` | Get portfolio overview |
-| POST | `/api/pools/:poolId/zap-in` | Execute zap in |
-| POST | `/api/positions/zap-out` | Execute zap out |
-| POST | `/api/chat` | Stream AI responses |
-
-### Engine Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/engine/config` | Get engine configuration |
-| POST | `/api/engine/config` | Update configuration |
-| GET | `/api/engine/status` | Get engine status |
-| GET | `/api/engine/rebalances` | Get rebalance history |
-| POST | `/api/engine/start` | Start engine |
-| POST | `/api/engine/stop` | Stop engine |
-| GET | `/api/engine/events` | SSE stream for events |
-
-### Chores Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/chores` | List active and completed chores |
-| POST | `/api/chores` | Create new chore |
-| GET | `/api/chores/:id` | Get chore details |
-| DELETE | `/api/chores/:id` | Cancel chore |
-| PATCH | `/api/chores/:id` | Update chore |
-| POST | `/api/chores/run` | Trigger immediate check |
-| GET | `/api/chores/events` | SSE stream for chore events |
-
-### Copy LP Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/copy-lp/top-lpers` | Get top LPer list |
-| GET | `/api/copy-lp/lpers/:address` | Get LPer details |
-| GET | `/api/copy-lp/mirrors` | List active mirrors |
-| POST | `/api/copy-lp/mirrors` | Start mirroring |
-| DELETE | `/api/copy-lp/mirrors/:id` | Stop mirroring |
-| PATCH | `/api/copy-lp/mirrors/:id` | Update mirror settings |
-| GET | `/api/copy-lp/history` | Get mirror history |
-
-### Agent Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/agent/pools` | Get pools with agentScore |
-| GET | `/api/agent/positions/:owner` | Get positions |
-| POST | `/api/agent/analyze` | Analyze wallet |
-| POST | `/api/agent/recommend` | Get AI recommendations |
-| POST | `/api/agent/action` | Execute action |
-| POST | `/api/agent/chat` | Chat with SSE |
-
-## MCP Server
-
-The Model Context Protocol server runs on port 4001 and provides:
-
-- `get_pool_recommendations`: Get AI-powered pool recommendations
-- `analyze_position`: Analyze a specific LP position
-- `rebalance_position`: Rebalance a position to optimal range
-- `get_engine_status`: Get status of the auto-rebalancing engine
-- `configure_engine`: Configure the auto-rebalancing engine
-- `create_chore`: Create a new chore/task for the agent
-- `list_chores`: List active and completed chores
-- `get_top_lpers`: Get list of top performing LPs
-- `start_copy_lper`: Start copying a top LPer
-- `zap_in`: Execute a zap-in to a pool
-- `zap_out`: Execute a zap-out from a position
-
-## agentScore Formula
-
-```
-agentScore = ((vol_24h * fee) / tvl) + (organic_score * 0.2) - (Math.abs(price_24h_change) * 0.1)
-```
-
-Higher is better. Considers realized yield, pool quality, and volatility penalty.
-
-## Position Health
-
-A position is considered healthy when:
-- `inRange === true` (earning fees)
-- `dpr > 0` (positive daily return)
-- `pnl.percent > -5` (not heavily underwater)
-
-Unhealthy positions get a yellow warning border in the UI.
-
-## Tech Notes
-
-- LP Agent API uses `stratergy` (not `strategy`) in the add-tx endpoint
-- Position IDs are encrypted strings from LP Agent - pass them as-is
-- The backend proxies all LP Agent calls to keep API keys server-side
-- AI responses stream via Server-Sent Events
-- MCP server uses stdio transport for compatibility
-
-## Production Deployment
-
-1. Set production API URLs in `.env.local`
-2. Deploy Express server to your preferred host (Railway, Render, etc.)
-3. Deploy Next.js to Vercel or similar
-4. Update CORS settings in `server/index.js` if needed
-5. Ensure environment variables are set on the server
-6. MCP server runs automatically alongside the Express server
-
-### Railway Deployment
-
-The `railway.json` is configured for deployment:
-```json
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "RAILPACK",
-    "buildCommand": "cd server && npm install"
-  },
-  "deploy": {
-    "startCommand": "node server/index.js",
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 100
-  }
-}
-```
+- **Orca Governance Integration**: Voting power tracking and proposal impact analysis
+- **Token Launch Bootstrapper**: Guided flow for new projects to create optimal Orca pools
+- **Mobile App**: React Native app for position alerts and quick actions
+- **Institutional Dashboard**: Multi-wallet portfolio management for DAOs and funds
+- **Advanced Hedging**: Integration with perp protocols to hedge IL exposure
+- **Social LP Leaderboards**: Gamified rankings of top Orca LPs
 
 ## License
 
