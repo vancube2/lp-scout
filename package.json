@@ -36,7 +36,6 @@
     "zod": "^3.25.76",
     "@orca-so/whirlpools-sdk": "^0.15.0",
     "@orca-so/common-sdk": "^0.7.0",
-    "@orca-so/whirlpools-client": "^0.15.0",
     "decimal.js": "^10.5.0",
     "@solana/spl-token": "^0.4.0"
   },
