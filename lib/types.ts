@@ -107,3 +107,93 @@ export interface ILProjection {
 export type Pool = OrcaPool;
 export type Position = OrcaPosition;
 
+
+
+// Token Launch Bootstrapper types
+export interface LaunchConfig {
+  pairName: string;
+  recommendations: {
+    feeTier: { tier: number; label: string; reason: string };
+    tickRange: { type: string; tickLower: number; tickUpper: number; widthDescription: string; reasoning: string; expectedUtilization: string };
+    minLiquidity: { minUSD: number; recommendedUSD: number; optimalUSD: number; reasoning: string };
+    priceAnchor: { strategy: string; description: string; adjustment: number };
+  };
+  bootstrapPhases: { phase: number; name: string; targetUSD: number; description: string; actions: string[]; duration: string }[];
+  revenue: { launchAssistFeeUSD: number; projectedReferralRevenueUSD: number };
+  riskFactors: { level: string; factor: string; mitigation: string }[];
+  estimatedAPR: { conservative: string; expected: string; optimistic: string };
+}
+
+// Migration types
+export interface MigrationResult {
+  canMigrate: boolean;
+  source: any;
+  orca: { pool: OrcaPool; projection: any };
+  comparison: { aprDelta: number; aprDeltaPercent: string; feeSavingsUSD: string; capitalEfficiencyGain: string };
+  migrationPath: { step: number; action: string; estimatedTime: string; gasCost: string }[];
+  estimatedMigrationCost: { estimatedSOL: string; estimatedUSD: string; percentageOfPosition: string };
+  breakEvenDays: number | null;
+}
+
+// Volume alert types
+export interface VolumeAlert {
+  id: string;
+  type: string;
+  severity: string;
+  poolAddress: string;
+  poolName: string;
+  spikeRatio: string;
+  baselineVolume24h: string;
+  currentVolume24h: string;
+  signal: string;
+  reasoning: string;
+  timestamp: string;
+  estimatedFeeBoost: string;
+}
+
+// Leaderboard types
+export interface LPer {
+  rank: number;
+  wallet: string;
+  walletShort: string;
+  displayName: string;
+  totalValueUSD: number;
+  poolsActive: number;
+  primaryPool: string;
+  apr30d: string;
+  riskAdjustedYield: string;
+  winRate: string;
+  sharpeRatio: string;
+  maxDrawdown: string;
+  feesEarned30d: string;
+  riskLevel: string;
+  followers: number;
+  isVerified: boolean;
+  streakDays: number;
+}
+
+// Governance types
+export interface Proposal {
+  id: string;
+  title: string;
+  status: string;
+  category: string;
+  description: string;
+  lpImpact: { affectedPools: string[] | string; impactDirection: string; impactLevel: string; reasoning: string };
+  voting: { for: number; against: number; abstain: number; quorum: number };
+  endsAt: string;
+  implementedAt?: string;
+}
+
+// Multi-wallet types
+export interface AggregatedPortfolio {
+  organization: { id: string; name: string; walletCount: number };
+  totalValueUSD: number;
+  totalPnLUSD: number;
+  totalPnLPercent: string;
+  positionsCount: number;
+  walletSummaries: any[];
+  poolBreakdown: any[];
+  riskFlags: any[];
+  recommendations: any[];
+}
